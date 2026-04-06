@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Allow: /methodology
+Allow: /pricing
+Allow: /waitlist
+Disallow: /editor
+Disallow: /dashboard
+Disallow: /report
+Disallow: /api/
+
+Sitemap: https://writevault.app/sitemap.xml
