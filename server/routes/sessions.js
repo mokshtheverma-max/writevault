@@ -71,7 +71,7 @@ router.post('/', optionalAuth, checkSessionLimit, validateSession, async (req, r
       await incrementSessionsUsed(req.user.id);
     }
   } catch (err) {
-    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || (err.code === 'SQLITE_CONSTRAINT' && err.message?.includes('UNIQUE'))) {
       return res.status(409).json({ error: 'Session with this hash already exists' });
     }
     console.error('Insert session error:', err);

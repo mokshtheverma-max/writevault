@@ -1,73 +1,53 @@
-const sqlite3 = require('sqlite3').verbose();
+const { createClient } = require('@libsql/client');
 const path = require('path');
 const fs = require('fs');
 
-const DB_PATH = process.env.DATABASE_PATH || path.join(__dirname, '..', 'data', 'writevault.db');
-const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
+const DB_URL = process.env.DATABASE_URL || 'file:data/writevault.db';
 
-// Ensure data directory exists
-const dataDir = path.dirname(DB_PATH);
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-const sqliteDb = new sqlite3.Database(DB_PATH);
-
-// ── Promise wrappers ────────────────────────────────────────────────────────
-
-function dbRun(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    sqliteDb.run(sql, params, function (err) {
-      if (err) reject(err);
-      else resolve({ changes: this.changes, lastID: this.lastID });
-    });
-  });
-}
-
-function dbGet(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    sqliteDb.get(sql, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
-  });
-}
-
-function dbAll(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    sqliteDb.all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
-}
-
-function dbExec(sql) {
-  return new Promise((resolve, reject) => {
-    sqliteDb.exec(sql, (err) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
-}
-
-// Convert {key: val} to {$key: val} for named parameters
-function $(params) {
-  const result = {};
-  for (const [k, v] of Object.entries(params)) {
-    result[`$${k}`] = v;
+// Ensure data directory exists for local file databases
+if (DB_URL.startsWith('file:')) {
+  const filePath = DB_URL.replace('file:', '');
+  const dataDir = path.dirname(filePath);
+  if (dataDir && !fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
   }
-  return result;
+}
+
+const client = createClient({
+  url: DB_URL,
+  authToken: process.env.DATABASE_AUTH_TOKEN || undefined,
+});
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+async function dbRun(sql, args = []) {
+  const result = await client.execute({ sql, args });
+  return { changes: result.rowsAffected, lastID: Number(result.lastInsertRowid) };
+}
+
+async function dbGet(sql, args = []) {
+  const result = await client.execute({ sql, args });
+  return result.rows[0] || undefined;
+}
+
+async function dbAll(sql, args = []) {
+  const result = await client.execute({ sql, args });
+  return result.rows;
+}
+
+async function dbExec(sql) {
+  await client.executeMultiple(sql);
 }
 
 // ── Initialize database ─────────────────────────────────────────────────────
 
 async function initialize() {
-  await dbExec('PRAGMA journal_mode = WAL');
-  await dbExec('PRAGMA foreign_keys = ON');
+  await client.execute('PRAGMA journal_mode = WAL');
+  await client.execute('PRAGMA foreign_keys = ON');
 
-  const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
-  await dbExec(schema);
+  const schemaPath = path.join(__dirname, 'schema.sql');
+  const schema = fs.readFileSync(schemaPath, 'utf8');
+  await client.executeMultiple(schema);
 
   // Migrations — safely add columns that may not exist on older databases
   const migrations = [
@@ -82,38 +62,40 @@ async function initialize() {
     "ALTER TABLE users ADD COLUMN bonus_sessions INTEGER DEFAULT 0",
   ];
   for (const sql of migrations) {
-    try { await dbExec(sql); } catch { /* column already exists */ }
+    try { await client.execute(sql); } catch { /* column already exists */ }
   }
 
-  // Analytics tables (previously created in analytics.js at load time)
-  await dbExec(`
+  // Analytics tables
+  await client.executeMultiple(`
     CREATE TABLE IF NOT EXISTS analytics_events (
       id TEXT PRIMARY KEY,
       event TEXT NOT NULL,
       props TEXT,
       timestamp INTEGER,
       created_at INTEGER DEFAULT (unixepoch())
-    )
+    );
+    CREATE INDEX IF NOT EXISTS idx_analytics_event ON analytics_events(event);
+    CREATE INDEX IF NOT EXISTS idx_analytics_created ON analytics_events(created_at);
   `);
-  await dbExec('CREATE INDEX IF NOT EXISTS idx_analytics_event ON analytics_events(event)');
-  await dbExec('CREATE INDEX IF NOT EXISTS idx_analytics_created ON analytics_events(created_at)');
 }
 
 // ── Query functions ─────────────────────────────────────────────────────────
 
-const insertSession = (params) => dbRun(`
-  INSERT INTO sessions (id, title, content, events, human_score, sha256_hash, start_time, end_time, created_at, metadata, user_id)
-  VALUES ($id, $title, $content, $events, $human_score, $sha256_hash, $start_time, $end_time, unixepoch(), $metadata, $user_id)
-`, $(params));
+const insertSession = (p) => dbRun(
+  `INSERT INTO sessions (id, title, content, events, human_score, sha256_hash, start_time, end_time, created_at, metadata, user_id)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), ?, ?)`,
+  [p.id, p.title, p.content, p.events, p.human_score, p.sha256_hash, p.start_time, p.end_time, p.metadata, p.user_id]
+);
 
 const getSessionById = (id) => dbGet('SELECT * FROM sessions WHERE id = ?', [id]);
 
 const getSessionByHash = (hash) => dbGet('SELECT * FROM sessions WHERE sha256_hash = ?', [hash]);
 
-const insertVerification = (params) => dbRun(`
-  INSERT INTO session_verifications (id, session_id, verified_at, verifier_ip)
-  VALUES ($id, $session_id, unixepoch(), $verifier_ip)
-`, $(params));
+const insertVerification = (p) => dbRun(
+  `INSERT INTO session_verifications (id, session_id, verified_at, verifier_ip)
+   VALUES (?, ?, unixepoch(), ?)`,
+  [p.id, p.session_id, p.verifier_ip]
+);
 
 const getVerificationCount = (sessionId) => dbGet(
   'SELECT COUNT(*) as count FROM session_verifications WHERE session_id = ?', [sessionId]
@@ -121,10 +103,11 @@ const getVerificationCount = (sessionId) => dbGet(
 
 // ── Auth query functions ────────────────────────────────────────────────────
 
-const insertUser = (params) => dbRun(`
-  INSERT INTO users (id, email, password_hash, name, role, created_at)
-  VALUES ($id, $email, $password_hash, $name, $role, unixepoch())
-`, $(params));
+const insertUser = (p) => dbRun(
+  `INSERT INTO users (id, email, password_hash, name, role, created_at)
+   VALUES (?, ?, ?, ?, ?, unixepoch())`,
+  [p.id, p.email, p.password_hash, p.name, p.role]
+);
 
 const getUserById = (id) => dbGet('SELECT * FROM users WHERE id = ?', [id]);
 
@@ -136,10 +119,11 @@ const updateLastLogin = (timestamp, id) => dbRun(
 
 const updateDnaData = (data, id) => dbRun('UPDATE users SET dna_data = ? WHERE id = ?', [data, id]);
 
-const insertWaitlistEntry = (params) => dbRun(`
-  INSERT INTO waitlist (id, email, name, role, school, referrer, joined_at)
-  VALUES ($id, $email, $name, $role, $school, $referrer, unixepoch())
-`, $(params));
+const insertWaitlistEntry = (p) => dbRun(
+  `INSERT INTO waitlist (id, email, name, role, school, referrer, joined_at)
+   VALUES (?, ?, ?, ?, ?, ?, unixepoch())`,
+  [p.id, p.email, p.name, p.role, p.school, p.referrer]
+);
 
 const getWaitlistCount = () => dbGet('SELECT COUNT(*) as count FROM waitlist');
 
@@ -176,10 +160,11 @@ const getUserByReferralCode = (code) => dbGet('SELECT * FROM users WHERE referra
 
 const setUserReferralCode = (code, id) => dbRun('UPDATE users SET referral_code = ? WHERE id = ?', [code, id]);
 
-const insertReferral = (params) => dbRun(`
-  INSERT INTO referrals (id, referrer_user_id, referred_email, referred_user_id, status, created_at)
-  VALUES ($id, $referrer_user_id, $referred_email, $referred_user_id, $status, unixepoch())
-`, $(params));
+const insertReferral = (p) => dbRun(
+  `INSERT INTO referrals (id, referrer_user_id, referred_email, referred_user_id, status, created_at)
+   VALUES (?, ?, ?, ?, ?, unixepoch())`,
+  [p.id, p.referrer_user_id, p.referred_email, p.referred_user_id, p.status]
+);
 
 const getReferralsByReferrer = (userId) => dbAll(
   'SELECT * FROM referrals WHERE referrer_user_id = ? ORDER BY created_at DESC', [userId]
@@ -203,15 +188,17 @@ const addBonusSessions = (amount, id) => dbRun(
   'UPDATE users SET bonus_sessions = bonus_sessions + ? WHERE id = ?', [amount, id]
 );
 
-const insertReward = (params) => dbRun(`
-  INSERT INTO rewards (id, user_id, type, description, granted_at)
-  VALUES ($id, $user_id, $type, $description, unixepoch())
-`, $(params));
+const insertReward = (p) => dbRun(
+  `INSERT INTO rewards (id, user_id, type, description, granted_at)
+   VALUES (?, ?, ?, ?, unixepoch())`,
+  [p.id, p.user_id, p.type, p.description]
+);
 
-const getSessionsByUserId = (userId) => dbAll(`
-  SELECT id, title, human_score, start_time, end_time, created_at, metadata
-  FROM sessions WHERE user_id = ? ORDER BY created_at DESC
-`, [userId]);
+const getSessionsByUserId = (userId) => dbAll(
+  `SELECT id, title, human_score, start_time, end_time, created_at, metadata
+   FROM sessions WHERE user_id = ? ORDER BY created_at DESC`,
+  [userId]
+);
 
 // ── Exported db helper for inline queries in other files ────────────────────
 
