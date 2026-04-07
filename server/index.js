@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
+const { initialize } = require('./db/database');
 const { generalLimiter } = require('./middleware/rateLimiter');
 const sessionRoutes = require('./routes/sessions');
 const authRoutes = require('./routes/auth');
@@ -74,6 +75,11 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`WriteVault Backend ready on port ${PORT}`);
+initialize().then(() => {
+  app.listen(PORT, () => {
+    console.log(`WriteVault Backend ready on port ${PORT}`);
+  });
+}).catch(err => {
+  console.error('Failed to initialize database:', err);
+  process.exit(1);
 });

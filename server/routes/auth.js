@@ -47,7 +47,7 @@ router.post('/register', async (req, res) => {
     }
 
     // Check if email already taken
-    const existing = getUserByEmail.get(email.toLowerCase().trim());
+    const existing = await getUserByEmail(email.toLowerCase().trim());
     if (existing) {
       return res.status(409).json({ error: 'An account with this email already exists' });
     }
@@ -56,7 +56,7 @@ router.post('/register', async (req, res) => {
     const userId = uuidv4();
     const validRole = ['student', 'teacher', 'admin'].includes(role) ? role : 'student';
 
-    insertUser.run({
+    await insertUser({
       id: userId,
       email: email.toLowerCase().trim(),
       password_hash: passwordHash,
@@ -67,19 +67,19 @@ router.post('/register', async (req, res) => {
     // Generate unique referral code
     let referralCode = generateReferralCode(name);
     let attempts = 0;
-    while (getUserByReferralCode.get(referralCode) && attempts < 10) {
+    while (await getUserByReferralCode(referralCode) && attempts < 10) {
       referralCode = generateReferralCode(name);
       attempts++;
     }
-    try { setUserReferralCode.run(referralCode, userId); } catch { /* ignore if collision */ }
+    try { await setUserReferralCode(referralCode, userId); } catch { /* ignore if collision */ }
 
     // Handle referral code from registration
     const { referralCode: refCode } = req.body;
     if (refCode) {
-      const referrer = getUserByReferralCode.get(refCode.toUpperCase().trim());
+      const referrer = await getUserByReferralCode(refCode.toUpperCase().trim());
       if (referrer && referrer.id !== userId) {
         try {
-          insertReferral.run({
+          await insertReferral({
             id: uuidv4(),
             referrer_user_id: referrer.id,
             referred_email: email.toLowerCase().trim(),
@@ -112,7 +112,7 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const user = getUserByEmail.get(email.toLowerCase().trim());
+    const user = await getUserByEmail(email.toLowerCase().trim());
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
@@ -122,7 +122,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    updateLastLogin.run(Math.floor(Date.now() / 1000), user.id);
+    await updateLastLogin(Math.floor(Date.now() / 1000), user.id);
 
     const token = generateToken(user.id);
 
@@ -158,7 +158,7 @@ router.get('/me', requireAuth, (req, res) => {
 
 // ── PUT /api/auth/dna ───────────────────────────────────────────────────────
 
-router.put('/dna', requireAuth, (req, res) => {
+router.put('/dna', requireAuth, async (req, res) => {
   const { dnaData } = req.body;
   if (!dnaData) {
     return res.status(400).json({ error: 'dnaData is required' });
@@ -166,7 +166,7 @@ router.put('/dna', requireAuth, (req, res) => {
 
   try {
     const json = typeof dnaData === 'string' ? dnaData : JSON.stringify(dnaData);
-    updateDnaData.run(json, req.user.id);
+    await updateDnaData(json, req.user.id);
     res.json({ success: true });
   } catch (err) {
     console.error('DNA update error:', err);
@@ -176,8 +176,8 @@ router.put('/dna', requireAuth, (req, res) => {
 
 // ── GET /api/auth/dna ───────────────────────────────────────────────────────
 
-router.get('/dna', requireAuth, (req, res) => {
-  const user = getUserById.get(req.user.id);
+router.get('/dna', requireAuth, async (req, res) => {
+  const user = await getUserById(req.user.id);
   if (!user || !user.dna_data) {
     return res.json({ dnaData: null });
   }
@@ -191,7 +191,7 @@ router.get('/dna', requireAuth, (req, res) => {
 
 // ── POST /api/waitlist ──────────────────────────────────────────────────────
 
-router.post('/waitlist', (req, res) => {
+router.post('/waitlist', async (req, res) => {
   try {
     const { email, name, role, school, ref } = req.body;
 
@@ -204,14 +204,14 @@ router.post('/waitlist', (req, res) => {
     }
 
     // Check if already on waitlist
-    const existing = getWaitlistByEmail.get(email.toLowerCase().trim());
+    const existing = await getWaitlistByEmail(email.toLowerCase().trim());
     if (existing) {
-      const { count } = getWaitlistCount.get();
+      const { count } = await getWaitlistCount();
       return res.json({ success: true, position: count, alreadyJoined: true });
     }
 
     const id = uuidv4();
-    insertWaitlistEntry.run({
+    await insertWaitlistEntry({
       id,
       email: email.toLowerCase().trim(),
       name: name ? name.trim() : null,
@@ -220,7 +220,7 @@ router.post('/waitlist', (req, res) => {
       referrer: ref || null,
     });
 
-    const { count } = getWaitlistCount.get();
+    const { count } = await getWaitlistCount();
 
     res.status(201).json({ success: true, position: count });
   } catch (err) {

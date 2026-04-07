@@ -39,13 +39,13 @@ function checkPlan(requiredPlan) {
  * Middleware: check if free-plan user has hit the 3-session limit.
  * Looks up the latest sessions_used from the database.
  */
-function checkSessionLimit(req, res, next) {
+async function checkSessionLimit(req, res, next) {
   if (!req.user) {
     // Allow unauthenticated session submissions (backwards compat)
     return next();
   }
 
-  const user = db.prepare('SELECT plan, sessions_used FROM users WHERE id = ?').get(req.user.id);
+  const user = await db.get('SELECT plan, sessions_used FROM users WHERE id = ?', [req.user.id]);
   if (!user) {
     return next();
   }

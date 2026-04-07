@@ -1,7 +1,7 @@
 const { verifyToken } = require('../utils/jwt');
 const { getUserById } = require('../db/database');
 
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Authentication required' });
@@ -13,7 +13,7 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 
-  const user = getUserById.get(payload.userId);
+  const user = await getUserById(payload.userId);
   if (!user) {
     return res.status(401).json({ error: 'User not found' });
   }

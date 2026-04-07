@@ -90,7 +90,7 @@ router.post('/create-checkout', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Invalid priceId' });
     }
 
-    const user = getUserById.get(req.user.id);
+    const user = await getUserById(req.user.id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -104,7 +104,7 @@ router.post('/create-checkout', requireAuth, async (req, res) => {
         metadata: { writevault_user_id: user.id },
       });
       customerId = customer.id;
-      db.prepare('UPDATE users SET stripe_customer_id = ? WHERE id = ?').run(customerId, user.id);
+      await db.run('UPDATE users SET stripe_customer_id = ? WHERE id = ?', [customerId, user.id]);
     }
 
     const session = await stripe.checkout.sessions.create({
@@ -147,7 +147,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         const plan = session.metadata?.plan;
 
         if (userId && plan) {
-          updateUserPlan.run(
+          await updateUserPlan(
             plan,
             session.customer,
             session.subscription,
@@ -162,7 +162,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       case 'customer.subscription.deleted': {
         const subscription = event.data.object;
         const customerId = subscription.customer;
-        downgradeUserByStripeCustomer.run(customerId);
+        await downgradeUserByStripeCustomer(customerId);
         console.log(`Customer ${customerId} subscription cancelled — downgraded to free`);
         break;
       }
@@ -177,7 +177,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 
         if (plan) {
           const expiresAt = subscription.current_period_end || null;
-          updateUserPlanByStripeCustomer.run(
+          await updateUserPlanByStripeCustomer(
             plan,
             subscription.id,
             expiresAt,
@@ -203,7 +203,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 
 router.get('/portal', requireAuth, async (req, res) => {
   try {
-    const user = getUserById.get(req.user.id);
+    const user = await getUserById(req.user.id);
     if (!user || !user.stripe_customer_id) {
       return res.status(400).json({ error: 'No billing account found. Subscribe to a plan first.' });
     }
@@ -222,8 +222,8 @@ router.get('/portal', requireAuth, async (req, res) => {
 
 // ── GET /api/payments/status ────────────────────────────────────────────────
 
-router.get('/status', requireAuth, (req, res) => {
-  const user = getUserById.get(req.user.id);
+router.get('/status', requireAuth, async (req, res) => {
+  const user = await getUserById(req.user.id);
   if (!user) {
     return res.status(404).json({ error: 'User not found' });
   }

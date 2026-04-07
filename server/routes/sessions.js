@@ -16,7 +16,7 @@ const { checkSessionLimit } = require('../middleware/planGate');
 const router = express.Router();
 
 // Optionally attach user from Authorization header (non-blocking)
-function optionalAuth(req, res, next) {
+async function optionalAuth(req, res, next) {
   const header = req.headers.authorization;
   if (header && header.startsWith('Bearer ')) {
     try {
@@ -24,7 +24,7 @@ function optionalAuth(req, res, next) {
       const { getUserById } = require('../db/database');
       const payload = verifyToken(header.slice(7));
       if (payload) {
-        const user = getUserById.get(payload.userId);
+        const user = await getUserById(payload.userId);
         if (user) req.user = user;
       }
     } catch { /* proceed without auth */ }
@@ -33,7 +33,7 @@ function optionalAuth(req, res, next) {
 }
 
 // POST /api/sessions — store a new writing session
-router.post('/', optionalAuth, checkSessionLimit, validateSession, (req, res) => {
+router.post('/', optionalAuth, checkSessionLimit, validateSession, async (req, res) => {
   const session = req.body;
 
   // Server-side score recomputation to prevent manipulation
@@ -65,10 +65,10 @@ router.post('/', optionalAuth, checkSessionLimit, validateSession, (req, res) =>
   };
 
   try {
-    insertSession.run(row);
+    await insertSession(row);
     // Increment sessions_used for authenticated users
     if (req.user?.id) {
-      incrementSessionsUsed.run(req.user.id);
+      await incrementSessionsUsed(req.user.id);
     }
   } catch (err) {
     if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -86,15 +86,15 @@ router.post('/', optionalAuth, checkSessionLimit, validateSession, (req, res) =>
 });
 
 // GET /api/sessions/:id — full session with verification log
-router.get('/:id', (req, res) => {
-  const session = getSessionById.get(req.params.id);
+router.get('/:id', async (req, res) => {
+  const session = await getSessionById(req.params.id);
   if (!session) {
     return res.status(404).json({ error: 'Session not found' });
   }
 
   // Log verification attempt
   try {
-    insertVerification.run({
+    await insertVerification({
       id: uuidv4(),
       session_id: session.id,
       verifier_ip: req.ip,
@@ -103,7 +103,7 @@ router.get('/:id', (req, res) => {
     console.error('Verification log error:', err);
   }
 
-  const { count } = getVerificationCount.get(session.id);
+  const { count } = await getVerificationCount(session.id);
 
   res.json({
     ...session,
@@ -114,13 +114,13 @@ router.get('/:id', (req, res) => {
 });
 
 // GET /api/sessions/:id/summary — lightweight session summary
-router.get('/:id/summary', (req, res) => {
-  const session = getSessionById.get(req.params.id);
+router.get('/:id/summary', async (req, res) => {
+  const session = await getSessionById(req.params.id);
   if (!session) {
     return res.status(404).json({ error: 'Session not found' });
   }
 
-  const { count } = getVerificationCount.get(session.id);
+  const { count } = await getVerificationCount(session.id);
 
   res.json({
     id: session.id,
@@ -136,8 +136,8 @@ router.get('/:id/summary', (req, res) => {
 });
 
 // GET /api/sessions/:id/events — paginated events
-router.get('/:id/events', (req, res) => {
-  const session = getSessionById.get(req.params.id);
+router.get('/:id/events', async (req, res) => {
+  const session = await getSessionById(req.params.id);
   if (!session) {
     return res.status(404).json({ error: 'Session not found' });
   }
@@ -242,13 +242,13 @@ function deriveLayerScores(humanScore, metadata) {
 }
 
 // GET /api/sessions/:id/teacher-view — educator-facing verified session report
-router.get('/:id/teacher-view', (req, res) => {
+router.get('/:id/teacher-view', async (req, res) => {
   const idOrHash = req.params.id;
 
   // Try lookup by UUID first, then by hash
-  let session = getSessionById.get(idOrHash);
+  let session = await getSessionById(idOrHash);
   if (!session) {
-    session = getSessionByHash.get(idOrHash.toLowerCase().trim());
+    session = await getSessionByHash(idOrHash.toLowerCase().trim());
   }
 
   if (!session) {
@@ -259,7 +259,7 @@ router.get('/:id/teacher-view', (req, res) => {
 
   // Log teacher verification
   try {
-    insertVerification.run({
+    await insertVerification({
       id: uuidv4(),
       session_id: session.id,
       verifier_ip: req.ip,
@@ -268,7 +268,7 @@ router.get('/:id/teacher-view', (req, res) => {
     console.error('Teacher verification log error:', err);
   }
 
-  const { count } = getVerificationCount.get(session.id);
+  const { count } = await getVerificationCount(session.id);
 
   const events = JSON.parse(session.events);
   const metadata = JSON.parse(session.metadata);
@@ -286,7 +286,6 @@ router.get('/:id/teacher-view', (req, res) => {
   const layerScores = deriveLayerScores(serverScore, { ...metadata, wordCount });
 
   // Build writing timeline
-  const keydowns = events.filter(e => e.type === 'keydown');
   const startMs = session.start_time;
   const endMs = session.end_time;
   const durationMs = endMs - startMs;
@@ -324,19 +323,19 @@ router.get('/:id/teacher-view', (req, res) => {
 });
 
 // POST /api/verify — verify by SHA256 hash
-router.post('/verify', verifyLimiter, (req, res) => {
+router.post('/verify', verifyLimiter, async (req, res) => {
   const { hash } = req.body;
   if (!hash || typeof hash !== 'string') {
     return res.status(400).json({ error: 'hash is required' });
   }
 
-  const session = getSessionByHash.get(hash.toLowerCase().trim());
+  const session = await getSessionByHash(hash.toLowerCase().trim());
   if (!session) {
     return res.status(404).json({ error: 'No session found with this hash' });
   }
 
   try {
-    insertVerification.run({
+    await insertVerification({
       id: uuidv4(),
       session_id: session.id,
       verifier_ip: req.ip,
@@ -345,7 +344,7 @@ router.post('/verify', verifyLimiter, (req, res) => {
     console.error('Verification log error:', err);
   }
 
-  const { count } = getVerificationCount.get(session.id);
+  const { count } = await getVerificationCount(session.id);
 
   res.json({
     verified: true,
