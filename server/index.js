@@ -76,7 +76,7 @@ app.use((err, req, res, next) => {
 });
 
 initialize().then(() => {
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`WriteVault Backend ready on port ${PORT}`);
   });
 }).catch(err => {
