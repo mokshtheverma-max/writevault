@@ -1,5 +1,5 @@
 const express = require('express');
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID } = require('crypto');
 const { validateSession, computeHash } = require('../middleware/validateSession');
 const { verifyLimiter } = require('../middleware/rateLimiter');
 const {
@@ -50,7 +50,7 @@ router.post('/', optionalAuth, checkSessionLimit, validateSession, async (req, r
   // Re-verify hash server-side
   const hash = computeHash(session.content, session.events);
 
-  const sessionId = uuidv4();
+  const sessionId = randomUUID();
   const row = {
     id: sessionId,
     title: session.title.trim(),
@@ -95,7 +95,7 @@ router.get('/:id', async (req, res) => {
   // Log verification attempt
   try {
     await insertVerification({
-      id: uuidv4(),
+      id: randomUUID(),
       session_id: session.id,
       verifier_ip: req.ip,
     });
@@ -260,7 +260,7 @@ router.get('/:id/teacher-view', async (req, res) => {
   // Log teacher verification
   try {
     await insertVerification({
-      id: uuidv4(),
+      id: randomUUID(),
       session_id: session.id,
       verifier_ip: req.ip,
     });
@@ -336,7 +336,7 @@ router.post('/verify', verifyLimiter, async (req, res) => {
 
   try {
     await insertVerification({
-      id: uuidv4(),
+      id: randomUUID(),
       session_id: session.id,
       verifier_ip: req.ip,
     });
