@@ -22,7 +22,7 @@
     "react-router-dom": "^7.14.0",
     "recharts": "^3.8.1",
     "uuid": "^13.0.0",
-    "vite-plugin-pwa": "^1.2.0"
+    "vite-plugin-pwa": "^0.21.0"
   },
   "devDependencies": {
     "@types/crypto-js": "^4.2.2",
