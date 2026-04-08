@@ -45,9 +45,16 @@ async function initialize() {
   await client.execute('PRAGMA journal_mode = WAL');
   await client.execute('PRAGMA foreign_keys = ON');
 
+  // Run schema as individual statements
   const schemaPath = path.join(__dirname, 'schema.sql');
   const schema = fs.readFileSync(schemaPath, 'utf8');
-  await client.executeMultiple(schema);
+  const statements = schema
+    .split(';')
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
+  for (const sql of statements) {
+    try { await client.execute(sql); } catch { /* table/index already exists */ }
+  }
 
   // Migrations — safely add columns that may not exist on older databases
   const migrations = [
@@ -66,17 +73,20 @@ async function initialize() {
   }
 
   // Analytics tables
-  await client.executeMultiple(`
-    CREATE TABLE IF NOT EXISTS analytics_events (
+  const analyticsSql = [
+    `CREATE TABLE IF NOT EXISTS analytics_events (
       id TEXT PRIMARY KEY,
       event TEXT NOT NULL,
       props TEXT,
       timestamp INTEGER,
       created_at INTEGER DEFAULT (unixepoch())
-    );
-    CREATE INDEX IF NOT EXISTS idx_analytics_event ON analytics_events(event);
-    CREATE INDEX IF NOT EXISTS idx_analytics_created ON analytics_events(created_at);
-  `);
+    )`,
+    'CREATE INDEX IF NOT EXISTS idx_analytics_event ON analytics_events(event)',
+    'CREATE INDEX IF NOT EXISTS idx_analytics_created ON analytics_events(created_at)',
+  ];
+  for (const sql of analyticsSql) {
+    try { await client.execute(sql); } catch { /* already exists */ }
+  }
 }
 
 // ── Query functions ─────────────────────────────────────────────────────────
