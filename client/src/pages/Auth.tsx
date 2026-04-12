@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { track, Events } from '../utils/analytics'
 import { GraduationCap, BookOpen, Eye, EyeOff, Loader2 } from 'lucide-react'
@@ -53,13 +53,15 @@ export default function Auth() {
 
         {/* Card */}
         <div className="bg-surface border border-border rounded-2xl p-5 sm:p-8">
-          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
+          <form onSubmit={handleSubmit} autoComplete="on" className="space-y-4 sm:space-y-5">
             {/* Name (register only) */}
             {mode === 'register' && (
               <div>
                 <label className="block text-text-secondary text-sm mb-1.5">Full name</label>
                 <input
                   type="text"
+                  name="name"
+                  autoComplete="name"
                   value={name}
                   onChange={e => setName(e.target.value)}
                   required
@@ -74,6 +76,8 @@ export default function Auth() {
               <label className="block text-text-secondary text-sm mb-1.5">Email</label>
               <input
                 type="email"
+                name="email"
+                autoComplete="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
@@ -88,6 +92,8 @@ export default function Auth() {
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
@@ -103,6 +109,13 @@ export default function Auth() {
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
+              {mode === 'login' && (
+                <div className="text-right mt-1">
+                  <Link to="/forgot-password" className="text-xs text-primary hover:underline cursor-pointer">
+                    Forgot password?
+                  </Link>
+                </div>
+              )}
             </div>
 
             {/* Role selector (register only) */}

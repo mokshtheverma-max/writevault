@@ -129,6 +129,8 @@ const updateLastLogin = (timestamp, id) => dbRun(
 
 const updateDnaData = (data, id) => dbRun('UPDATE users SET dna_data = ? WHERE id = ?', [data, id]);
 
+const updateUserPassword = (hash, email) => dbRun('UPDATE users SET password_hash = ? WHERE email = ?', [hash, email]);
+
 const insertWaitlistEntry = (p) => dbRun(
   `INSERT INTO waitlist (id, email, name, role, school, referrer, joined_at)
    VALUES (?, ?, ?, ?, ?, ?, unixepoch())`,
@@ -251,4 +253,5 @@ module.exports = {
   addBonusSessions,
   insertReward,
   getSessionsByUserId,
+  updateUserPassword,
 };

@@ -16,6 +16,7 @@ import Verify from './pages/Verify'
 import TeacherVerify from './pages/TeacherVerify'
 import Methodology from './pages/Methodology'
 import Auth from './pages/Auth'
+import ForgotPassword from './pages/ForgotPassword'
 import Waitlist from './pages/Waitlist'
 import Pricing from './pages/Pricing'
 import Sessions from './pages/Sessions'
@@ -59,6 +60,7 @@ function AnimatedRoutes() {
         <Routes location={location}>
           <Route path="/"                         element={<RootRoute />} />
           <Route path="/auth"                     element={<Auth />} />
+          <Route path="/forgot-password"            element={<ForgotPassword />} />
           <Route path="/waitlist"                 element={<Waitlist />} />
           <Route path="/editor"                   element={<RequireAuth><Editor /></RequireAuth>} />
           <Route path="/sessions"                 element={<RequireAuth><Sessions /></RequireAuth>} />

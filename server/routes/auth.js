@@ -3,12 +3,14 @@ const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const { generateToken } = require('../utils/jwt');
 const { requireAuth } = require('../middleware/auth');
+const crypto = require('crypto');
 const {
   insertUser,
   getUserByEmail,
   getUserById,
   updateLastLogin,
   updateDnaData,
+  updateUserPassword,
   insertWaitlistEntry,
   getWaitlistCount,
   getWaitlistByEmail,
@@ -16,6 +18,10 @@ const {
   setUserReferralCode,
   insertReferral,
 } = require('../db/database');
+
+// In-memory stores for password reset flow
+const resetCodes = new Map();
+const resetTokens = new Map();
 
 function generateReferralCode(name) {
   const prefix = (name || 'USER').replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 4).padEnd(4, 'X');
@@ -186,6 +192,93 @@ router.get('/dna', requireAuth, async (req, res) => {
     res.json({ dnaData: JSON.parse(user.dna_data) });
   } catch {
     res.json({ dnaData: null });
+  }
+});
+
+// ── POST /api/auth/forgot-password ──────────────────────────────────────
+
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await getUserByEmail(normalizedEmail);
+
+    // Always return success (don't reveal if email exists)
+    if (!user) {
+      return res.json({ success: true, message: 'Reset code sent' });
+    }
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    resetCodes.set(normalizedEmail, { code, expires: Date.now() + 10 * 60 * 1000 });
+
+    console.log(`Reset code for ${normalizedEmail}: ${code}`);
+
+    // Include code in response for testing (no email service yet)
+    res.json({ success: true, message: 'Reset code sent', code });
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    res.status(500).json({ error: 'Failed to send reset code' });
+  }
+});
+
+// ── POST /api/auth/verify-reset-code ────────────────────────────────────
+
+router.post('/verify-reset-code', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      return res.status(400).json({ error: 'Email and code are required' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const stored = resetCodes.get(normalizedEmail);
+
+    if (!stored || stored.code !== code || Date.now() > stored.expires) {
+      return res.status(400).json({ error: 'Invalid or expired code' });
+    }
+
+    // Valid — generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    resetTokens.set(resetToken, { email: normalizedEmail, expires: Date.now() + 15 * 60 * 1000 });
+    resetCodes.delete(normalizedEmail);
+
+    res.json({ success: true, resetToken });
+  } catch (err) {
+    console.error('Verify reset code error:', err);
+    res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+// ── POST /api/auth/reset-password ───────────────────────────────────────
+
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { resetToken, newPassword } = req.body;
+    if (!resetToken || !newPassword) {
+      return res.status(400).json({ error: 'Reset token and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const stored = resetTokens.get(resetToken);
+    if (!stored || Date.now() > stored.expires) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await updateUserPassword(passwordHash, stored.email);
+    resetTokens.delete(resetToken);
+
+    res.json({ success: true, message: 'Password reset successfully' });
+  } catch (err) {
+    console.error('Reset password error:', err);
+    res.status(500).json({ error: 'Failed to reset password' });
   }
 });
 
