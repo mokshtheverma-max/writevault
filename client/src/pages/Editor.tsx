@@ -45,7 +45,7 @@ export default function Editor() {
   const [recoveryData, setRecoveryData] = useState<AutoSave | null>(null)
 
   const sessionStart  = useRef<number>(0)
-  const textareaRef   = useRef<HTMLTextAreaElement>(null)
+  const editorRef     = useRef<HTMLDivElement>(null)
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null)
   const cleanupRef    = useRef<(() => void) | null>(null)
   const eventsRef     = useRef<KeystrokeEvent[]>([])
@@ -97,7 +97,7 @@ export default function Editor() {
 
   useEffect(() => {
     if (!isRecording) return
-    const el = textareaRef.current
+    const el = editorRef.current
     if (!el) return
     const cleanup = attach(el)
     if (cleanup) cleanupRef.current = cleanup
@@ -240,7 +240,7 @@ export default function Editor() {
       elapsed={elapsed}
       onFinish={handleFinish}
       canFinish={wordCount >= 5}
-      textareaRef={textareaRef}
+      editorRef={editorRef}
       formatTime={formatTime}
     />
   )

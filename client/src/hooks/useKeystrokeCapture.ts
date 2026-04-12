@@ -27,8 +27,16 @@ export function useKeystrokeCapture({ onEvent }: UseKeystrokeCaptureOptions) {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       const now = performance.now()
-      const textarea = e.target as HTMLTextAreaElement
-      const currentPos = textarea?.selectionStart ?? 0
+      const target = e.target as HTMLElement & { selectionStart?: number }
+      let currentPos = 0
+      if (typeof target?.selectionStart === 'number') {
+        currentPos = target.selectionStart
+      } else {
+        const sel = window.getSelection()
+        if (sel && sel.rangeCount > 0) {
+          currentPos = sel.getRangeAt(0).startOffset
+        }
+      }
       const timeSinceLast = now - lastKeystrokeTime.current
 
       // Detect pause
@@ -116,7 +124,7 @@ export function useKeystrokeCapture({ onEvent }: UseKeystrokeCaptureOptions) {
   )
 
   const attach = useCallback(
-    (el: HTMLTextAreaElement | null) => {
+    (el: HTMLElement | null) => {
       if (!el) return
       el.addEventListener('keydown', handleKeyDown)
       el.addEventListener('paste', handlePaste)

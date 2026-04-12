@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, forwardRef } from 'react'
+import { useState, useRef, useEffect, forwardRef, useCallback } from 'react'
 import {
   Underline,
   Strikethrough,
@@ -18,18 +18,38 @@ import {
   Redo2,
   Printer,
   Highlighter,
-  ChevronDown,
   CheckCircle,
 } from 'lucide-react'
 import CoachPanel from './CoachPanel'
 
 /* ── Constants ────────────────────────────────────────────────────────── */
-const PAGE_WIDTH = 816          // 8.5" @ 96dpi
-const PAGE_HEIGHT = 1056        // 11" @ 96dpi
-const PAGE_PADDING = 96         // 1" margins
-const CONTENT_WIDTH = PAGE_WIDTH - PAGE_PADDING * 2   // 624
-const CONTENT_HEIGHT = PAGE_HEIGHT - PAGE_PADDING * 2 // 864
+const PAGE_WIDTH = 816
+const PAGE_HEIGHT = 1056
+const PAGE_PADDING = 96
+const CONTENT_WIDTH = PAGE_WIDTH - PAGE_PADDING * 2
+const CONTENT_HEIGHT = PAGE_HEIGHT - PAGE_PADDING * 2
 const PAGE_GAP = 16
+
+const FONTS = [
+  'Times New Roman',
+  'Arial',
+  'Helvetica',
+  'Georgia',
+  'Verdana',
+  'Courier New',
+  'Comic Sans MS',
+  'Impact',
+  'Trebuchet MS',
+  'Palatino',
+]
+
+const SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72]
+
+const SIZE_MAP: Record<number, string> = {
+  8: '1', 9: '2', 10: '3', 11: '3', 12: '4', 14: '5',
+  16: '5', 18: '6', 20: '6', 24: '7', 28: '7', 32: '7',
+  36: '7', 48: '7', 72: '7',
+}
 
 /* ── Types ────────────────────────────────────────────────────────────── */
 interface DocumentEditorProps {
@@ -47,7 +67,7 @@ interface DocumentEditorProps {
   elapsed: number
   onFinish: () => void
   canFinish: boolean
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>
+  editorRef: React.RefObject<HTMLDivElement | null>
   formatTime: (ms: number) => string
 }
 
@@ -123,11 +143,13 @@ function FinishModal({
 function TBtn({
   active,
   onClick,
+  onMouseDown,
   title,
   children,
 }: {
   active?: boolean
   onClick?: () => void
+  onMouseDown?: (e: React.MouseEvent) => void
   title?: string
   children: React.ReactNode
 }) {
@@ -135,6 +157,7 @@ function TBtn({
     <button
       type="button"
       title={title}
+      onMouseDown={onMouseDown ?? (e => e.preventDefault())}
       onClick={onClick}
       className={`w-8 h-8 rounded flex items-center justify-center text-gray-600 transition-colors cursor-pointer ${
         active ? 'bg-gray-200' : 'hover:bg-gray-100'
@@ -149,21 +172,8 @@ function TSep() {
   return <div className="w-px h-5 bg-gray-300 mx-1 shrink-0" />
 }
 
-function TDropdown({ label, width }: { label: string; width: number }) {
-  return (
-    <div
-      className="h-8 px-2 rounded hover:bg-gray-100 flex items-center justify-between gap-1 text-sm text-gray-700 cursor-pointer select-none"
-      style={{ width }}
-    >
-      <span className="truncate">{label}</span>
-      <ChevronDown size={14} className="text-gray-500 shrink-0" />
-    </div>
-  )
-}
-
 /* ── Ruler ────────────────────────────────────────────────────────────── */
 function Ruler() {
-  // 8 inch marks inside 6.5" content area between 1" margins
   const ticks = []
   for (let i = 0; i <= 8; i++) {
     ticks.push(
@@ -189,41 +199,47 @@ function Ruler() {
         className="relative bg-white h-full border-l border-r border-gray-300"
         style={{ width: PAGE_WIDTH }}
       >
-        {/* Margin shaded zones */}
-        <div
-          className="absolute top-0 bottom-0 bg-[#dce3ec]"
-          style={{ left: 0, width: PAGE_PADDING }}
-        />
-        <div
-          className="absolute top-0 bottom-0 bg-[#dce3ec]"
-          style={{ right: 0, width: PAGE_PADDING }}
-        />
-        {/* Left margin handle */}
-        <div
-          className="absolute w-0 h-0 border-l-[5px] border-r-[5px] border-b-[6px] border-l-transparent border-r-transparent border-b-gray-500"
-          style={{ left: PAGE_PADDING - 5, top: 0 }}
-        />
-        <div
-          className="absolute w-0 h-0 border-l-[5px] border-r-[5px] border-t-[6px] border-l-transparent border-r-transparent border-t-gray-500"
-          style={{ left: PAGE_PADDING - 5, bottom: 0 }}
-        />
-        {/* Right margin handle */}
-        <div
-          className="absolute w-0 h-0 border-l-[5px] border-r-[5px] border-b-[6px] border-l-transparent border-r-transparent border-b-gray-500"
-          style={{ right: PAGE_PADDING - 5, top: 0 }}
-        />
-        <div
-          className="absolute w-0 h-0 border-l-[5px] border-r-[5px] border-t-[6px] border-l-transparent border-r-transparent border-t-gray-500"
-          style={{ right: PAGE_PADDING - 5, bottom: 0 }}
-        />
+        <div className="absolute top-0 bottom-0 bg-[#dce3ec]" style={{ left: 0, width: PAGE_PADDING }} />
+        <div className="absolute top-0 bottom-0 bg-[#dce3ec]" style={{ right: 0, width: PAGE_PADDING }} />
         {ticks}
       </div>
     </div>
   )
 }
 
+/* ── Table Picker ─────────────────────────────────────────────────────── */
+function TablePicker({ onPick, onClose }: { onPick: (rows: number, cols: number) => void; onClose: () => void }) {
+  const [hover, setHover] = useState<{ r: number; c: number }>({ r: 0, c: 0 })
+  const MAX = 6
+  return (
+    <div
+      className="absolute top-full mt-1 right-0 z-30 bg-white border border-gray-200 rounded-lg shadow-lg p-2"
+      onMouseDown={e => e.preventDefault()}
+    >
+      <div className="text-xs text-gray-600 mb-1 text-center">
+        {hover.r > 0 ? `${hover.r} x ${hover.c}` : 'Select size'}
+      </div>
+      <div className="grid grid-cols-6 gap-0.5">
+        {Array.from({ length: MAX * MAX }, (_, i) => {
+          const r = Math.floor(i / MAX) + 1
+          const c = (i % MAX) + 1
+          const active = r <= hover.r && c <= hover.c
+          return (
+            <div
+              key={i}
+              className={`w-4 h-4 border ${active ? 'bg-indigo-400 border-indigo-500' : 'bg-white border-gray-300'} cursor-pointer`}
+              onMouseEnter={() => setHover({ r, c })}
+              onClick={() => { onPick(r, c); onClose() }}
+            />
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 /* ── Main Component ───────────────────────────────────────────────────── */
-const DocumentEditor = forwardRef<HTMLTextAreaElement, DocumentEditorProps>(
+const DocumentEditor = forwardRef<HTMLDivElement, DocumentEditorProps>(
   function DocumentEditor(props, _ref) {
     const {
       content,
@@ -239,35 +255,64 @@ const DocumentEditor = forwardRef<HTMLTextAreaElement, DocumentEditorProps>(
       elapsed,
       onFinish,
       canFinish,
-      textareaRef,
+      editorRef,
       formatTime,
     } = props
 
     const [showFinishModal, setShowFinishModal] = useState(false)
+    const [showTablePicker, setShowTablePicker] = useState(false)
     const scrollRef = useRef<HTMLDivElement>(null)
-    const hiddenMeasureRef = useRef<HTMLDivElement>(null)
     const [pages, setPages] = useState(1)
     const [currentPage, setCurrentPage] = useState(1)
+    const savedSelection = useRef<Range | null>(null)
 
-    // Toolbar toggle state (visual only — doesn't alter textarea formatting)
-    const [bold, setBold] = useState(false)
-    const [italic, setItalic] = useState(false)
-    const [underline, setUnderline] = useState(false)
-    const [strike, setStrike] = useState(false)
-    const [align, setAlign] = useState<'left' | 'center' | 'right' | 'justify'>('left')
+    // Formatting state
+    const [currentFont, setCurrentFont] = useState('Times New Roman')
+    const [currentSize, setCurrentSize] = useState(12)
+    const [currentLineHeight, setCurrentLineHeight] = useState('1.5')
+    const [isBold, setIsBold] = useState(false)
+    const [isItalic, setIsItalic] = useState(false)
+    const [isUnderline, setIsUnderline] = useState(false)
+    const [isStrike, setIsStrike] = useState(false)
+    const [alignment, setAlignment] = useState<'left' | 'center' | 'right' | 'justify'>('left')
 
-    // Recalculate pages when content changes
+    // Color picker refs
+    const colorInputRef = useRef<HTMLInputElement>(null)
+    const highlightInputRef = useRef<HTMLInputElement>(null)
+
+    /* ── Initialize editor with content once ──────────────────────── */
     useEffect(() => {
-      if (hiddenMeasureRef.current) {
-        const measuredHeight = hiddenMeasureRef.current.scrollHeight
-        const needed = Math.max(1, Math.ceil(measuredHeight / CONTENT_HEIGHT))
-        setPages(needed)
-      } else {
-        setPages(1)
+      if (editorRef.current && !editorRef.current.innerHTML && content) {
+        editorRef.current.innerText = content
       }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
+    /* ── Execute formatting command safely ────────────────────────── */
+    const exec = useCallback((cmd: string, value?: string) => {
+      editorRef.current?.focus()
+      document.execCommand(cmd, false, value)
+      // Sync content after command
+      if (editorRef.current) {
+        onContentChange(editorRef.current.innerText || '')
+      }
+    }, [editorRef, onContentChange])
+
+    /* ── Input handler ────────────────────────────────────────────── */
+    const handleInput = useCallback(() => {
+      const text = editorRef.current?.innerText || ''
+      onContentChange(text)
+    }, [editorRef, onContentChange])
+
+    /* ── Page count ───────────────────────────────────────────────── */
+    useEffect(() => {
+      // Approximate: ~2800 chars per page at 12pt TNR 1.5 line height
+      const CHARS_PER_PAGE = 2800
+      const needed = Math.max(1, Math.ceil((content.length || 1) / CHARS_PER_PAGE))
+      setPages(needed)
     }, [content])
 
-    // Track current page from scroll position
+    /* ── Track current page from scroll ───────────────────────────── */
     useEffect(() => {
       const el = scrollRef.current
       if (!el) return
@@ -281,6 +326,77 @@ const DocumentEditor = forwardRef<HTMLTextAreaElement, DocumentEditorProps>(
       return () => el.removeEventListener('scroll', handleScroll)
     }, [pages])
 
+    /* ── Format detection on selection change ─────────────────────── */
+    useEffect(() => {
+      const handler = () => {
+        const sel = window.getSelection()
+        if (!sel || sel.rangeCount === 0) return
+        const node = sel.anchorNode
+        if (!node || !editorRef.current?.contains(node)) return
+        try {
+          setIsBold(document.queryCommandState('bold'))
+          setIsItalic(document.queryCommandState('italic'))
+          setIsUnderline(document.queryCommandState('underline'))
+          setIsStrike(document.queryCommandState('strikeThrough'))
+          if (document.queryCommandState('justifyCenter')) setAlignment('center')
+          else if (document.queryCommandState('justifyRight')) setAlignment('right')
+          else if (document.queryCommandState('justifyFull')) setAlignment('justify')
+          else setAlignment('left')
+        } catch { /* ignore */ }
+      }
+      document.addEventListener('selectionchange', handler)
+      return () => document.removeEventListener('selectionchange', handler)
+    }, [editorRef])
+
+    /* ── Keyboard shortcuts ───────────────────────────────────────── */
+    const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return
+      const k = e.key.toLowerCase()
+      if (k === 'b') { e.preventDefault(); exec('bold') }
+      else if (k === 'i') { e.preventDefault(); exec('italic') }
+      else if (k === 'u') { e.preventDefault(); exec('underline') }
+      else if (k === 'z') { e.preventDefault(); exec('undo') }
+      else if (k === 'y') { e.preventDefault(); exec('redo') }
+      else if (k === 'p') { e.preventDefault(); window.print() }
+    }, [exec])
+
+    /* ── Save/restore selection (for color pickers) ───────────────── */
+    const saveSelection = () => {
+      const sel = window.getSelection()
+      if (sel && sel.rangeCount > 0) savedSelection.current = sel.getRangeAt(0).cloneRange()
+    }
+    const restoreSelection = () => {
+      const sel = window.getSelection()
+      if (sel && savedSelection.current) {
+        sel.removeAllRanges()
+        sel.addRange(savedSelection.current)
+      }
+    }
+
+    /* ── Link / Table insertion ───────────────────────────────────── */
+    const handleInsertLink = () => {
+      const url = window.prompt('Enter URL:')
+      if (url) exec('createLink', url)
+    }
+
+    const handleInsertTable = (rows: number, cols: number) => {
+      let html = '<table style="border-collapse:collapse;width:100%;margin:8px 0;">'
+      for (let r = 0; r < rows; r++) {
+        html += '<tr>'
+        for (let c = 0; c < cols; c++) {
+          html += '<td style="border:1px solid #999;padding:6px;min-width:40px;">&nbsp;</td>'
+        }
+        html += '</tr>'
+      }
+      html += '</table><p><br></p>'
+      exec('insertHTML', html)
+    }
+
+    const handleInsertImage = () => {
+      const url = window.prompt('Enter image URL:')
+      if (url) exec('insertImage', url)
+    }
+
     const handleFinishClick = () => {
       if (!canFinish) return
       setShowFinishModal(true)
@@ -288,7 +404,10 @@ const DocumentEditor = forwardRef<HTMLTextAreaElement, DocumentEditorProps>(
 
     const handlePrint = () => window.print()
 
-    const totalTextareaHeight = Math.max(CONTENT_HEIGHT, pages * CONTENT_HEIGHT + (pages - 1) * (PAGE_PADDING * 2 + PAGE_GAP))
+    const totalEditorHeight = Math.max(
+      CONTENT_HEIGHT,
+      pages * CONTENT_HEIGHT + (pages - 1) * (PAGE_PADDING * 2 + PAGE_GAP),
+    )
 
     return (
       <div className="flex flex-col h-screen bg-[#f0f4f9] overflow-hidden">
@@ -341,75 +460,142 @@ const DocumentEditor = forwardRef<HTMLTextAreaElement, DocumentEditorProps>(
           </div>
 
           {/* Row 2 — Full formatting toolbar */}
-          <div className="h-11 hidden md:flex items-center px-3 gap-0.5 overflow-x-auto">
+          <div className="h-11 hidden md:flex items-center px-3 gap-0.5 overflow-x-auto relative">
             {/* History */}
-            <TBtn title="Undo (Ctrl+Z)"><Undo2 size={16} /></TBtn>
-            <TBtn title="Redo (Ctrl+Y)"><Redo2 size={16} /></TBtn>
+            <TBtn title="Undo (Ctrl+Z)" onClick={() => exec('undo')}><Undo2 size={16} /></TBtn>
+            <TBtn title="Redo (Ctrl+Y)" onClick={() => exec('redo')}><Redo2 size={16} /></TBtn>
             <TSep />
 
             {/* Print */}
             <TBtn title="Print (Ctrl+P)" onClick={handlePrint}><Printer size={16} /></TBtn>
             <TSep />
 
-            {/* Font */}
-            <TDropdown label="Times New Roman" width={140} />
-            <TDropdown label="12" width={48} />
+            {/* Font family */}
+            <select
+              value={currentFont}
+              onMouseDown={saveSelection}
+              onChange={e => {
+                const f = e.target.value
+                setCurrentFont(f)
+                restoreSelection()
+                exec('fontName', f)
+              }}
+              style={{ fontFamily: currentFont }}
+              className="border border-gray-300 rounded px-2 py-0.5 text-sm bg-white text-gray-700 cursor-pointer hover:bg-gray-50 w-36 mr-1"
+            >
+              {FONTS.map(f => (
+                <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
+              ))}
+            </select>
+
+            {/* Font size */}
+            <select
+              value={currentSize}
+              onMouseDown={saveSelection}
+              onChange={e => {
+                const size = Number(e.target.value)
+                setCurrentSize(size)
+                restoreSelection()
+                exec('fontSize', SIZE_MAP[size] || '4')
+              }}
+              className="border border-gray-300 rounded px-1 py-0.5 text-sm bg-white text-gray-700 cursor-pointer w-14 mr-1"
+            >
+              {SIZES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
             <TSep />
 
             {/* Text formatting */}
-            <TBtn title="Bold (Ctrl+B)" active={bold} onClick={() => setBold(v => !v)}>
+            <TBtn title="Bold (Ctrl+B)" active={isBold} onClick={() => exec('bold')}>
               <span className="font-bold text-[14px] leading-none">B</span>
             </TBtn>
-            <TBtn title="Italic (Ctrl+I)" active={italic} onClick={() => setItalic(v => !v)}>
+            <TBtn title="Italic (Ctrl+I)" active={isItalic} onClick={() => exec('italic')}>
               <span className="italic text-[14px] leading-none font-serif">I</span>
             </TBtn>
-            <TBtn title="Underline (Ctrl+U)" active={underline} onClick={() => setUnderline(v => !v)}>
+            <TBtn title="Underline (Ctrl+U)" active={isUnderline} onClick={() => exec('underline')}>
               <Underline size={16} />
             </TBtn>
-            <TBtn title="Strikethrough" active={strike} onClick={() => setStrike(v => !v)}>
+            <TBtn title="Strikethrough" active={isStrike} onClick={() => exec('strikeThrough')}>
               <Strikethrough size={16} />
             </TBtn>
 
             {/* Text color / highlight */}
-            <TBtn title="Text color">
+            <TBtn title="Text color" onClick={() => { saveSelection(); colorInputRef.current?.click() }}>
               <div className="flex flex-col items-center leading-none">
                 <span className="text-[12px] font-semibold">A</span>
                 <span className="block w-3 h-0.5 bg-red-500 mt-px" />
               </div>
             </TBtn>
-            <TBtn title="Highlight"><Highlighter size={16} /></TBtn>
+            <input
+              ref={colorInputRef}
+              type="color"
+              className="absolute opacity-0 w-0 h-0 pointer-events-none"
+              onChange={e => { restoreSelection(); exec('foreColor', e.target.value) }}
+            />
+            <TBtn title="Highlight" onClick={() => { saveSelection(); highlightInputRef.current?.click() }}>
+              <Highlighter size={16} />
+            </TBtn>
+            <input
+              ref={highlightInputRef}
+              type="color"
+              className="absolute opacity-0 w-0 h-0 pointer-events-none"
+              onChange={e => { restoreSelection(); exec('hiliteColor', e.target.value) }}
+            />
             <TSep />
 
             {/* Alignment */}
-            <TBtn title="Align left" active={align === 'left'} onClick={() => setAlign('left')}>
+            <TBtn title="Align left" active={alignment === 'left'} onClick={() => { exec('justifyLeft'); setAlignment('left') }}>
               <AlignLeft size={16} />
             </TBtn>
-            <TBtn title="Align center" active={align === 'center'} onClick={() => setAlign('center')}>
+            <TBtn title="Align center" active={alignment === 'center'} onClick={() => { exec('justifyCenter'); setAlignment('center') }}>
               <AlignCenter size={16} />
             </TBtn>
-            <TBtn title="Align right" active={align === 'right'} onClick={() => setAlign('right')}>
+            <TBtn title="Align right" active={alignment === 'right'} onClick={() => { exec('justifyRight'); setAlignment('right') }}>
               <AlignRight size={16} />
             </TBtn>
-            <TBtn title="Justify" active={align === 'justify'} onClick={() => setAlign('justify')}>
+            <TBtn title="Justify" active={alignment === 'justify'} onClick={() => { exec('justifyFull'); setAlignment('justify') }}>
               <AlignJustify size={16} />
             </TBtn>
             <TSep />
 
+            {/* Line spacing */}
+            <select
+              value={currentLineHeight}
+              onChange={e => setCurrentLineHeight(e.target.value)}
+              title="Line spacing"
+              className="border border-gray-300 rounded px-1 py-0.5 text-sm bg-white text-gray-700 cursor-pointer w-16 mr-1"
+            >
+              <option value="1.0">1.0</option>
+              <option value="1.15">1.15</option>
+              <option value="1.5">1.5</option>
+              <option value="2.0">2.0</option>
+            </select>
+            <TSep />
+
             {/* Lists */}
-            <TBtn title="Bulleted list"><List size={16} /></TBtn>
-            <TBtn title="Numbered list"><ListOrdered size={16} /></TBtn>
-            <TBtn title="Checklist"><ListChecks size={16} /></TBtn>
+            <TBtn title="Bulleted list" onClick={() => exec('insertUnorderedList')}><List size={16} /></TBtn>
+            <TBtn title="Numbered list" onClick={() => exec('insertOrderedList')}><ListOrdered size={16} /></TBtn>
+            <TBtn title="Checklist" onClick={() => exec('insertHTML', '<ul style="list-style:none;padding-left:20px;"><li>\u2610 </li></ul>')}>
+              <ListChecks size={16} />
+            </TBtn>
             <TSep />
 
             {/* Indent */}
-            <TBtn title="Decrease indent"><IndentDecrease size={16} /></TBtn>
-            <TBtn title="Increase indent"><IndentIncrease size={16} /></TBtn>
+            <TBtn title="Decrease indent" onClick={() => exec('outdent')}><IndentDecrease size={16} /></TBtn>
+            <TBtn title="Increase indent" onClick={() => exec('indent')}><IndentIncrease size={16} /></TBtn>
             <TSep />
 
             {/* Insert */}
-            <TBtn title="Insert link"><LinkIcon size={16} /></TBtn>
-            <TBtn title="Insert image"><ImageIcon size={16} /></TBtn>
-            <TBtn title="Insert table"><TableIcon size={16} /></TBtn>
+            <TBtn title="Insert link" onClick={handleInsertLink}><LinkIcon size={16} /></TBtn>
+            <TBtn title="Insert image" onClick={handleInsertImage}><ImageIcon size={16} /></TBtn>
+            <div className="relative">
+              <TBtn title="Insert table" onClick={() => setShowTablePicker(v => !v)}><TableIcon size={16} /></TBtn>
+              {showTablePicker && (
+                <TablePicker
+                  onPick={(r, c) => handleInsertTable(r, c)}
+                  onClose={() => setShowTablePicker(false)}
+                />
+              )}
+            </div>
 
             {/* Right side — stats */}
             <div className="ml-auto flex items-center gap-2 text-xs text-gray-500 shrink-0 pl-2">
@@ -454,25 +640,7 @@ const DocumentEditor = forwardRef<HTMLTextAreaElement, DocumentEditorProps>(
           <div ref={scrollRef} className="flex-1 overflow-y-auto bg-[#f0f4f9]" style={{ padding: 24 }}>
             <div className="flex flex-col items-center relative" style={{ gap: PAGE_GAP }}>
 
-              {/* Hidden measurement div */}
-              <div
-                ref={hiddenMeasureRef}
-                aria-hidden="true"
-                className="absolute opacity-0 pointer-events-none top-0 left-0"
-                style={{
-                  width: CONTENT_WIDTH,
-                  fontFamily: "'Times New Roman', Times, serif",
-                  fontSize: '16px',
-                  lineHeight: 1.5,
-                  letterSpacing: 'normal',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                }}
-              >
-                {content || ' '}
-              </div>
-
-              {/* Page shells (visual only — textarea lives on first page) */}
+              {/* Page shells */}
               {Array.from({ length: pages }, (_, i) => (
                 <div key={i} className="w-full flex justify-center relative">
                   {i > 0 && (
@@ -496,30 +664,28 @@ const DocumentEditor = forwardRef<HTMLTextAreaElement, DocumentEditorProps>(
                     }}
                   >
                     {i === 0 && (
-                      <textarea
-                        ref={textareaRef}
-                        value={content}
-                        onChange={e => onContentChange(e.target.value)}
-                        placeholder="Start typing your document here..."
+                      <div
+                        ref={editorRef}
+                        contentEditable
+                        suppressContentEditableWarning
+                        onInput={handleInput}
+                        onKeyDown={handleKeyDown}
                         spellCheck
                         autoFocus
-                        className="block border-none outline-none resize-none bg-transparent"
+                        data-placeholder="Start typing your essay here..."
+                        className="wv-editor"
                         style={{
-                          fontFamily: "'Times New Roman', Times, serif",
-                          fontSize: '16px',
-                          lineHeight: 1.5,
-                          color: '#000000',
-                          width: '100%',
-                          height: totalTextareaHeight,
+                          fontFamily: currentFont,
+                          fontSize: `${currentSize}pt`,
+                          lineHeight: currentLineHeight,
+                          width: CONTENT_WIDTH,
                           minHeight: CONTENT_HEIGHT,
+                          height: totalEditorHeight,
+                          outline: 'none',
+                          color: '#000',
                           caretColor: '#000',
-                          textAlign: align,
-                          fontWeight: bold ? 700 : 400,
-                          fontStyle: italic ? 'italic' : 'normal',
-                          textDecoration: [
-                            underline ? 'underline' : '',
-                            strike ? 'line-through' : '',
-                          ].filter(Boolean).join(' ') || 'none',
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
                         }}
                       />
                     )}
@@ -568,8 +734,18 @@ const DocumentEditor = forwardRef<HTMLTextAreaElement, DocumentEditorProps>(
         )}
 
         <style>{`
-          textarea::selection { background: rgba(59,130,246,0.2); }
-          textarea::placeholder { color: #9ca3af; }
+          .wv-editor:empty:before {
+            content: attr(data-placeholder);
+            color: #9ca3af;
+            pointer-events: none;
+          }
+          .wv-editor::selection { background: rgba(59,130,246,0.2); }
+          .wv-editor a { color: #2563eb; text-decoration: underline; }
+          .wv-editor ul, .wv-editor ol { padding-left: 40px; margin: 8px 0; }
+          .wv-editor ul { list-style: disc; }
+          .wv-editor ol { list-style: decimal; }
+          .wv-editor table { border-collapse: collapse; }
+          .wv-editor table td { border: 1px solid #999; padding: 6px; }
         `}</style>
       </div>
     )
