@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const { generateToken } = require('../utils/jwt');
 const { requireAuth } = require('../middleware/auth');
 const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 const {
   insertUser,
   getUserByEmail,
@@ -22,6 +23,14 @@ const {
 // In-memory stores for password reset flow
 const resetCodes = new Map();
 const resetTokens = new Map();
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
 function generateReferralCode(name) {
   const prefix = (name || 'USER').replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 4).padEnd(4, 'X');
@@ -209,16 +218,28 @@ router.post('/forgot-password', async (req, res) => {
 
     // Always return success (don't reveal if email exists)
     if (!user) {
-      return res.json({ success: true, message: 'Reset code sent' });
+      return res.json({ success: true, message: 'Reset code sent to your email' });
     }
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     resetCodes.set(normalizedEmail, { code, expires: Date.now() + 10 * 60 * 1000 });
 
-    console.log(`Reset code for ${normalizedEmail}: ${code}`);
+    await transporter.sendMail({
+      from: `"WriteVault" <${process.env.EMAIL_USER}>`,
+      to: normalizedEmail,
+      subject: 'Your WriteVault password reset code',
+      text: `Your WriteVault password reset code is: ${code}\n\nThis code expires in 10 minutes. If you didn't request this, you can safely ignore this email.`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#111;">
+          <h2 style="margin:0 0 12px;">Reset your password</h2>
+          <p style="color:#555;font-size:14px;margin:0 0 24px;">Use the code below to reset your WriteVault password. It expires in 10 minutes.</p>
+          <div style="background:#f4f4f7;border-radius:12px;padding:20px;text-align:center;font-size:28px;font-weight:bold;letter-spacing:8px;color:#4f46e5;">${code}</div>
+          <p style="color:#888;font-size:12px;margin-top:24px;">If you didn't request this, you can safely ignore this email.</p>
+        </div>
+      `,
+    });
 
-    // Include code in response for testing (no email service yet)
-    res.json({ success: true, message: 'Reset code sent', code });
+    res.json({ success: true, message: 'Reset code sent to your email' });
   } catch (err) {
     console.error('Forgot password error:', err);
     res.status(500).json({ error: 'Failed to send reset code' });

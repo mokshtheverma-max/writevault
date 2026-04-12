@@ -8,7 +8,6 @@ type Step = 'email' | 'code' | 'password'
 export default function ForgotPassword() {
   const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')
-  const [code, setCode] = useState('')
   const [digits, setDigits] = useState(['', '', '', '', '', ''])
   const [resetToken, setResetToken] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -50,7 +49,6 @@ export default function ForgotPassword() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to send code')
 
-      setCode(data.code || '')
       setStep('code')
       setResendCooldown(60)
     } catch (err: any) {
@@ -226,16 +224,9 @@ export default function ForgotPassword() {
             <div className="space-y-5">
               <div className="text-center">
                 <h1 className="text-xl font-bold text-text-primary mb-1">Check your email</h1>
-                <p className="text-text-secondary text-sm">We sent a 6-digit code to {email}</p>
+                <p className="text-text-secondary text-sm">We sent a 6-digit code to {email}. Check your inbox.</p>
+                <p className="text-text-muted text-xs mt-1">Didn't get it? Check your spam folder.</p>
               </div>
-
-              {/* Dev: show code since no email service */}
-              {code && (
-                <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-3 text-center">
-                  <p className="text-text-secondary text-xs mb-1">Your code is:</p>
-                  <p className="text-primary font-bold text-2xl tracking-widest">{code}</p>
-                </div>
-              )}
 
               <div className="flex justify-center gap-2" onPaste={handleDigitPaste}>
                 {digits.map((d, i) => (
