@@ -42,16 +42,6 @@ function generateReferralCode(name) {
 
 const router = express.Router();
 
-router.get('/fix-my-account', async (req, res) => {
-  try {
-    const hash = await bcrypt.hash('NewPassword123!', 12);
-    await updateUserPassword(hash, 'mokshtheverma@gmail.com');
-    res.json({ success: true, message: 'Password reset to NewPassword123!' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ── POST /api/auth/register ─────────────────────────────────────────────────
 
 router.post('/register', async (req, res) => {
