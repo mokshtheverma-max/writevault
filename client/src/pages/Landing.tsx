@@ -72,6 +72,7 @@ export default function Landing() {
         <div className="hidden md:flex items-center gap-6">
           <NavLink href="/methodology">How It Works</NavLink>
           <NavLink href="/verify/teacher">For Educators</NavLink>
+          <NavLink href="/blog">Blog</NavLink>
           <NavLink href="/pricing">Pricing</NavLink>
         </div>
 
@@ -550,7 +551,7 @@ export default function Landing() {
               <li><a href="/about" className="hover:text-white transition-colors">About</a></li>
               <li><a href="/methodology" className="hover:text-white transition-colors">Methodology</a></li>
               <li><a href="/pricing" className="hover:text-white transition-colors">Pricing</a></li>
-              <li><span className="cursor-default">Blog <span className="text-xs opacity-50">(coming soon)</span></span></li>
+              <li><a href="/blog" className="hover:text-white transition-colors">Blog</a></li>
             </ul>
           </div>
 

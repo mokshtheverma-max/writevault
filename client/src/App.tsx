@@ -28,6 +28,7 @@ import NotFound from './pages/NotFound'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsOfService from './pages/TermsOfService'
 import AboutPage from './pages/AboutPage'
+import Blog from './pages/Blog'
 import InstallPrompt from './components/InstallPrompt'
 
 const ONBOARDING_KEY = 'wv_onboarding_complete'
@@ -95,6 +96,7 @@ function AnimatedRoutes() {
           <Route path="/privacy"                  element={<PrivacyPolicy />} />
           <Route path="/terms"                    element={<TermsOfService />} />
           <Route path="/about"                    element={<AboutPage />} />
+          <Route path="/blog"                     element={<Blog />} />
           <Route path="/payment-success"          element={<RequireAuth><PaymentSuccess /></RequireAuth>} />
           <Route path="/billing"                  element={<RequireAuth><BillingPage /></RequireAuth>} />
           <Route path="*"                         element={<NotFound />} />
