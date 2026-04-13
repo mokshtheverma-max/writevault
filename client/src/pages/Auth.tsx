@@ -1,11 +1,12 @@
-import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { track, Events } from '../utils/analytics'
 import { GraduationCap, BookOpen, Eye, EyeOff, Loader2 } from 'lucide-react'
 
 export default function Auth() {
-  const [mode, setMode] = useState<'login' | 'register'>('register')
+  const [searchParams] = useSearchParams()
+  const [mode, setMode] = useState<'login' | 'register'>('login')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -16,6 +17,12 @@ export default function Auth() {
 
   const { login, register } = useAuth()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    const m = searchParams.get('mode')
+    if (m === 'register') setMode('register')
+    else setMode('login')
+  }, [searchParams])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

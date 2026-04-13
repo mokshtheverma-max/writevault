@@ -83,7 +83,7 @@ export default function Landing() {
             Sign In
           </button>
           <button
-            onClick={() => navigate('/auth')}
+            onClick={() => navigate('/auth?mode=register')}
             className="text-white text-sm font-medium px-4 py-2 rounded-lg transition-all hover:-translate-y-0.5"
             style={{
               background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
@@ -163,7 +163,7 @@ export default function Landing() {
           {/* CTAs */}
           <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center items-center">
             <button
-              onClick={() => navigate('/auth')}
+              onClick={() => navigate('/auth?mode=register')}
               className="text-white font-semibold rounded-xl transition-all hover:-translate-y-0.5"
               style={{
                 background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
@@ -496,7 +496,7 @@ export default function Landing() {
               Free forever. No credit card. Join 10,000+ students.
             </p>
             <button
-              onClick={() => navigate('/auth')}
+              onClick={() => navigate('/auth?mode=register')}
               className="text-white font-semibold rounded-xl transition-all hover:-translate-y-0.5 mt-8 inline-block"
               style={{
                 background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
