@@ -7,6 +7,7 @@ const { generalLimiter } = require('./middleware/rateLimiter');
 const sessionRoutes = require('./routes/sessions');
 const authRoutes = require('./routes/auth');
 const paymentRoutes = require('./routes/payments');
+const { ensureStripeProducts } = require('./routes/payments');
 const analyticsRoutes = require('./routes/analytics');
 const coachRoutes = require('./routes/coach');
 const referralRoutes = require('./routes/referrals');
@@ -75,7 +76,8 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-initialize().then(() => {
+initialize().then(async () => {
+  await ensureStripeProducts();
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`WriteVault Backend ready on port ${PORT}`);
   });

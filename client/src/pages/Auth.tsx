@@ -129,7 +129,7 @@ export default function Auth() {
             {mode === 'register' && (
               <div>
                 <label className="block text-text-secondary text-sm mb-2">I am a...</label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
                     type="button"
                     onClick={() => setRole('student')}

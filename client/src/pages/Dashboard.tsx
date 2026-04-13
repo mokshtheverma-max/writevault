@@ -489,10 +489,12 @@ export default function Dashboard() {
                 ),
               },
             ].map(({ title, sub, chart }) => (
-              <div key={title} className="bg-surface border border-border rounded-xl p-6">
-                <h3 className="text-text-primary font-medium mb-1">{title}</h3>
+              <div key={title} className="bg-surface border border-border rounded-xl p-4 sm:p-6">
+                <h3 className="text-text-primary font-medium mb-1 text-sm sm:text-base">{title}</h3>
                 <p className="text-text-muted text-xs mb-4">{sub}</p>
-                <ResponsiveContainer width="100%" height={180}>{chart}</ResponsiveContainer>
+                <div className="h-[200px] sm:h-[180px]">
+                  <ResponsiveContainer width="100%" height="100%">{chart}</ResponsiveContainer>
+                </div>
               </div>
             ))}
           </div>

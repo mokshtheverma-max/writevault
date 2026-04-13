@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Zap,
 } from 'lucide-react'
+import BottomTabBar from '../components/BottomTabBar'
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
 
@@ -103,10 +104,10 @@ export default function Home() {
   const firstName = user?.name?.split(' ')[0] ?? 'Writer'
 
   return (
-    <div className="flex h-screen bg-base text-text-primary overflow-hidden">
+    <div className="flex min-h-screen md:h-screen bg-base text-text-primary md:overflow-hidden">
 
-      {/* ── Sidebar ─────────────────────────────────────────────── */}
-      <aside className="w-60 bg-surface border-r border-border h-screen flex flex-col shrink-0">
+      {/* ── Sidebar (desktop only) ─────────────────────────── */}
+      <aside className="hidden md:flex w-60 bg-surface border-r border-border h-screen flex-col shrink-0">
         {/* User */}
         <div className="px-5 pt-6 pb-4 border-b border-border">
           <div className="flex items-center gap-3 mb-3">
@@ -159,8 +160,8 @@ export default function Home() {
       </aside>
 
       {/* ── Main Content ────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-5xl mx-auto px-8 py-10">
+      <main className="flex-1 md:overflow-y-auto pb-20 md:pb-0">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-10">
 
           {/* Welcome */}
           <section className="mb-8">
@@ -171,7 +172,7 @@ export default function Home() {
           </section>
 
           {/* Stats Row */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
             <StatCard
               icon={<History size={20} className="text-primary" />}
               label="Total Sessions"
@@ -347,6 +348,8 @@ export default function Home() {
 
         </div>
       </main>
+
+      <BottomTabBar />
     </div>
   )
 }

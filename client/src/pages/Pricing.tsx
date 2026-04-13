@@ -2,16 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { track, Events } from '../utils/analytics'
 import { API_BASE } from '../config'
+import { useAuth } from '../context/AuthContext'
 import { Check, X, Sparkles, Shield, GraduationCap, Building2, ChevronDown, ChevronUp, Lock } from 'lucide-react'
-
-// Replace with real Stripe publishable key from dashboard.stripe.com
-// const STRIPE_PUBLISHABLE_KEY = 'pk_test_placeholder_replace_with_real'
-
-const PRICE_IDS = {
-  student: { monthly: 'price_student_monthly_test', annual: 'price_student_annual_test' },
-  teacher: { monthly: 'price_teacher_monthly_test', annual: 'price_teacher_annual_test' },
-  institution: { monthly: 'price_institution_monthly_test', annual: 'price_institution_annual_test' },
-}
 
 const PRICES = {
   student: { monthly: 7, annual: 58 },
@@ -76,40 +68,41 @@ function Feature({ included, children }: { included: boolean; children: React.Re
   )
 }
 
-async function handleCheckout(priceId: string) {
-  const token = localStorage.getItem('wv_token')
-  if (!token) {
-    window.location.href = '/editor'
-    return
-  }
-
-  try {
-    const res = await fetch(`${API_BASE}/payments/create-checkout`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        priceId,
-        successUrl: `${window.location.origin}/pricing?checkout=success`,
-        cancelUrl: `${window.location.origin}/pricing?checkout=cancelled`,
-      }),
-    })
-    const data = await res.json()
-    if (data.checkoutUrl) {
-      track(Events.UPGRADE_CLICKED, { priceId })
-      window.location.href = data.checkoutUrl
-    }
-  } catch (err) {
-    console.error('Checkout error:', err)
-  }
-}
-
 export default function Pricing() {
   const navigate = useNavigate()
+  const { isAuthenticated, token } = useAuth()
   const [annual, setAnnual] = useState(false)
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null)
   useEffect(() => { track(Events.PRICING_VIEWED) }, [])
+
+  const handleUpgrade = async (plan: 'student' | 'teacher') => {
+    if (!isAuthenticated || !token) {
+      navigate('/auth?mode=register')
+      return
+    }
+    setLoadingPlan(plan)
+    try {
+      const res = await fetch(`${API_BASE}/payments/create-checkout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ plan }),
+      })
+      const data = await res.json()
+      if (data.checkoutUrl) {
+        track(Events.UPGRADE_CLICKED, { plan })
+        window.location.href = data.checkoutUrl
+      } else {
+        console.error('Checkout failed:', data.error)
+        setLoadingPlan(null)
+      }
+    } catch (err) {
+      console.error('Checkout error:', err)
+      setLoadingPlan(null)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-base text-text-primary">
@@ -214,10 +207,11 @@ export default function Pricing() {
               <Feature included>Priority support</Feature>
             </ul>
             <button
-              onClick={() => handleCheckout(annual ? PRICE_IDS.student.annual : PRICE_IDS.student.monthly)}
-              className="w-full bg-primary hover:bg-primary-hover text-white font-medium py-3 rounded-xl transition-colors text-sm hover:shadow-glow-sm"
+              onClick={() => handleUpgrade('student')}
+              disabled={loadingPlan === 'student'}
+              className="w-full bg-primary hover:bg-primary-hover text-white font-medium py-3 rounded-xl transition-colors text-sm hover:shadow-glow-sm disabled:opacity-60"
             >
-              Start Student Plan
+              {loadingPlan === 'student' ? 'Loading…' : 'Start Student Plan'}
             </button>
           </div>
 
@@ -243,10 +237,11 @@ export default function Pricing() {
               <Feature included>CSV export</Feature>
             </ul>
             <button
-              onClick={() => handleCheckout(annual ? PRICE_IDS.teacher.annual : PRICE_IDS.teacher.monthly)}
-              className="w-full border border-primary text-primary hover:bg-primary/10 font-medium py-3 rounded-xl transition-colors text-sm"
+              onClick={() => handleUpgrade('teacher')}
+              disabled={loadingPlan === 'teacher'}
+              className="w-full border border-primary text-primary hover:bg-primary/10 font-medium py-3 rounded-xl transition-colors text-sm disabled:opacity-60"
             >
-              Start Teacher Plan
+              {loadingPlan === 'teacher' ? 'Loading…' : 'Start Teacher Plan'}
             </button>
           </div>
 

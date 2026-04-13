@@ -19,6 +19,7 @@ import {
   Printer,
   Highlighter,
   CheckCircle,
+  MoreHorizontal,
 } from 'lucide-react'
 import CoachPanel from './CoachPanel'
 
@@ -261,6 +262,7 @@ const DocumentEditor = forwardRef<HTMLDivElement, DocumentEditorProps>(
 
     const [showFinishModal, setShowFinishModal] = useState(false)
     const [showTablePicker, setShowTablePicker] = useState(false)
+    const [showMobileMore, setShowMobileMore] = useState(false)
     const scrollRef = useRef<HTMLDivElement>(null)
     const [pages, setPages] = useState(1)
     const [currentPage, setCurrentPage] = useState(1)
@@ -459,7 +461,74 @@ const DocumentEditor = forwardRef<HTMLDivElement, DocumentEditorProps>(
             </div>
           </div>
 
-          {/* Row 2 — Full formatting toolbar */}
+          {/* Row 2 — Mobile toolbar (essential controls only) */}
+          <div className="md:hidden flex items-center px-2 gap-1 h-11 overflow-x-auto relative">
+            <TBtn title="Undo" onClick={() => exec('undo')}><Undo2 size={18} /></TBtn>
+            <TBtn title="Bold" active={isBold} onClick={() => exec('bold')}>
+              <span className="font-bold text-base leading-none">B</span>
+            </TBtn>
+            <TBtn title="Italic" active={isItalic} onClick={() => exec('italic')}>
+              <span className="italic text-base leading-none font-serif">I</span>
+            </TBtn>
+            <select
+              value={currentSize}
+              onMouseDown={saveSelection}
+              onChange={e => {
+                const size = Number(e.target.value)
+                setCurrentSize(size)
+                restoreSelection()
+                exec('fontSize', SIZE_MAP[size] || '4')
+              }}
+              className="border border-gray-300 rounded px-1 text-sm bg-white text-gray-700 cursor-pointer h-9 w-14"
+            >
+              {SIZES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <TBtn
+              title="Align"
+              onClick={() => {
+                const next =
+                  alignment === 'left' ? 'center' :
+                  alignment === 'center' ? 'right' :
+                  alignment === 'right' ? 'justify' : 'left'
+                const cmd =
+                  next === 'left' ? 'justifyLeft' :
+                  next === 'center' ? 'justifyCenter' :
+                  next === 'right' ? 'justifyRight' : 'justifyFull'
+                exec(cmd)
+                setAlignment(next)
+              }}
+            >
+              {alignment === 'center' ? <AlignCenter size={18} /> :
+               alignment === 'right' ? <AlignRight size={18} /> :
+               alignment === 'justify' ? <AlignJustify size={18} /> :
+               <AlignLeft size={18} />}
+            </TBtn>
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-xs text-gray-500 tabular-nums">{wordCount}w</span>
+              <div className="relative">
+                <TBtn title="More" onClick={() => setShowMobileMore(v => !v)}>
+                  <MoreHorizontal size={18} />
+                </TBtn>
+                {showMobileMore && (
+                  <>
+                    <div className="fixed inset-0 z-20" onClick={() => setShowMobileMore(false)} />
+                    <div className="absolute top-full right-0 mt-1 z-30 bg-white border border-gray-200 rounded-lg shadow-lg p-1 grid grid-cols-4 gap-1 min-w-[200px]">
+                      <TBtn title="Redo" onClick={() => { exec('redo'); setShowMobileMore(false) }}><Redo2 size={16} /></TBtn>
+                      <TBtn title="Underline" active={isUnderline} onClick={() => exec('underline')}><Underline size={16} /></TBtn>
+                      <TBtn title="Strike" active={isStrike} onClick={() => exec('strikeThrough')}><Strikethrough size={16} /></TBtn>
+                      <TBtn title="Bullet list" onClick={() => exec('insertUnorderedList')}><List size={16} /></TBtn>
+                      <TBtn title="Number list" onClick={() => exec('insertOrderedList')}><ListOrdered size={16} /></TBtn>
+                      <TBtn title="Indent +" onClick={() => exec('indent')}><IndentIncrease size={16} /></TBtn>
+                      <TBtn title="Indent -" onClick={() => exec('outdent')}><IndentDecrease size={16} /></TBtn>
+                      <TBtn title="Link" onClick={() => { handleInsertLink(); setShowMobileMore(false) }}><LinkIcon size={16} /></TBtn>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2 — Full formatting toolbar (desktop) */}
           <div className="h-11 hidden md:flex items-center px-3 gap-0.5 overflow-x-auto relative">
             {/* History */}
             <TBtn title="Undo (Ctrl+Z)" onClick={() => exec('undo')}><Undo2 size={16} /></TBtn>
@@ -637,7 +706,7 @@ const DocumentEditor = forwardRef<HTMLDivElement, DocumentEditorProps>(
           </div>
 
           {/* Document scroll area */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto bg-[#f0f4f9]" style={{ padding: 24 }}>
+          <div ref={scrollRef} className="flex-1 overflow-y-auto bg-[#f0f4f9] wv-scroll scroll-container">
             <div className="flex flex-col items-center relative" style={{ gap: PAGE_GAP }}>
 
               {/* Page shells */}
@@ -654,7 +723,7 @@ const DocumentEditor = forwardRef<HTMLDivElement, DocumentEditorProps>(
                     </div>
                   )}
                   <div
-                    className="relative bg-white"
+                    className="relative bg-white wv-page"
                     style={{
                       width: PAGE_WIDTH,
                       minHeight: PAGE_HEIGHT,
@@ -686,6 +755,7 @@ const DocumentEditor = forwardRef<HTMLDivElement, DocumentEditorProps>(
                           caretColor: '#000',
                           whiteSpace: 'pre-wrap',
                           wordBreak: 'break-word',
+                          maxWidth: '100%',
                         }}
                       />
                     )}
@@ -705,16 +775,17 @@ const DocumentEditor = forwardRef<HTMLDivElement, DocumentEditorProps>(
         </div>
 
         {/* ── Status Bar ────────────────────────────────────────── */}
-        <div className="bg-white border-t border-gray-200 h-7 flex items-center justify-between px-4 shrink-0 text-xs text-gray-600">
-          <span className="hidden sm:inline">
+        <div className="bg-white border-t border-gray-200 h-7 flex items-center justify-between px-3 sm:px-4 shrink-0 text-[11px] sm:text-xs text-gray-600">
+          <span className="hidden md:inline">
             {isAnalyzing ? (
               <span className="text-indigo-600 animate-pulse">Running 5-layer authenticity engine...</span>
             ) : (
               <>🔒 WriteVault is recording your writing process</>
             )}
           </span>
-          <span>{wordCount} words · {charCount} characters</span>
-          <span>Page {currentPage} of {pages}</span>
+          <span className="hidden sm:inline">{wordCount} words · {charCount} characters</span>
+          <span className="sm:hidden">{wordCount}w</span>
+          <span>Page {currentPage}/{pages}</span>
         </div>
 
         {showFinishModal && (
@@ -746,6 +817,23 @@ const DocumentEditor = forwardRef<HTMLDivElement, DocumentEditorProps>(
           .wv-editor ol { list-style: decimal; }
           .wv-editor table { border-collapse: collapse; }
           .wv-editor table td { border: 1px solid #999; padding: 6px; }
+          .wv-scroll { padding: 24px; }
+          @media (max-width: 768px) {
+            .wv-scroll { padding: 8px 0; }
+            .wv-page {
+              width: 100% !important;
+              padding: 16px !important;
+              min-height: auto !important;
+              box-shadow: none !important;
+              border-radius: 0 !important;
+            }
+            .wv-editor {
+              width: 100% !important;
+              min-height: 60vh !important;
+              height: auto !important;
+              font-size: 16px !important;
+            }
+          }
         `}</style>
       </div>
     )

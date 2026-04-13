@@ -105,6 +105,26 @@ html {
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Smooth momentum scrolling on iOS */
+.scroll-container {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile touch targets and iOS zoom prevention */
+@media (max-width: 768px) {
+  button, a, select {
+    min-height: 44px;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+  textarea {
+    min-height: 44px;
+    font-size: 16px !important;
+  }
+}
 
 @media print {
   .no-print {

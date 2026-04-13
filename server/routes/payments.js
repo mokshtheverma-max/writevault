@@ -3,29 +3,25 @@ const { requireAuth } = require('../middleware/auth');
 const {
   db,
   getUserById,
-  getUserByStripeCustomer,
   updateUserPlan,
   updateUserPlanByStripeCustomer,
+  getUserByStripeCustomer,
   downgradeUserByStripeCustomer,
 } = require('../db/database');
 
-// Replace with real Stripe keys from dashboard.stripe.com
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder_replace_with_real';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || 'whsec_placeholder_replace_with_real';
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
 const stripe = require('stripe')(STRIPE_SECRET_KEY);
 
 const router = express.Router();
 
-// Map Stripe price IDs to plan names
-const PRICE_TO_PLAN = {
-  'price_student_monthly_test': 'student',
-  'price_teacher_monthly_test': 'teacher',
-  'price_institution_monthly_test': 'institution',
-  // Annual price IDs
-  'price_student_annual_test': 'student',
-  'price_teacher_annual_test': 'teacher',
-  'price_institution_annual_test': 'institution',
+// ── Plan definitions ────────────────────────────────────────────────────────
+
+const PLAN_DEFS = {
+  student: { productName: 'WriteVault Student', amount: 700 },
+  teacher: { productName: 'WriteVault Teacher', amount: 1900 },
 };
 
 const PLAN_FEATURES = {
@@ -59,35 +55,73 @@ const PLAN_FEATURES = {
     classDashboard: true,
     csvExport: true,
   },
-  institution: {
-    sessions: Infinity,
-    fullAnalysis: true,
-    writingDNA: true,
-    pdfExport: true,
-    shareTeacher: true,
-    sessionHistory: Infinity,
-    prioritySupport: true,
-    bulkVerification: Infinity,
-    classDashboard: true,
-    csvExport: true,
-    sso: false, // coming soon
-    apiAccess: true,
-    customBranding: true,
-  },
 };
+
+// In-memory store for live Stripe price IDs (populated at startup)
+const PRICE_IDS = {
+  student: null,
+  teacher: null,
+};
+
+// ── Reverse map: price ID → plan name (kept in sync as prices are loaded) ───
+const priceToPlan = () => {
+  const map = {};
+  for (const [plan, id] of Object.entries(PRICE_IDS)) {
+    if (id) map[id] = plan;
+  }
+  return map;
+};
+
+// ── Stripe product/price bootstrap ──────────────────────────────────────────
+
+async function ensureStripeProducts() {
+  try {
+    const products = await stripe.products.list({ limit: 100 });
+
+    for (const [planKey, def] of Object.entries(PLAN_DEFS)) {
+      let price;
+      const product = products.data.find((p) => p.name === def.productName && p.active);
+
+      if (product) {
+        const prices = await stripe.prices.list({ product: product.id, active: true });
+        price = prices.data.find(
+          (p) => p.recurring?.interval === 'month' && p.unit_amount === def.amount
+        );
+      }
+
+      if (!price) {
+        const prod = product || (await stripe.products.create({ name: def.productName }));
+        price = await stripe.prices.create({
+          product: prod.id,
+          unit_amount: def.amount,
+          currency: 'usd',
+          recurring: { interval: 'month' },
+        });
+        console.log(`Created Stripe price for ${planKey}: ${price.id}`);
+      }
+
+      PRICE_IDS[planKey] = price.id;
+    }
+
+    console.log('Stripe prices ready:', PRICE_IDS);
+  } catch (e) {
+    console.error('Stripe setup error:', e.message);
+  }
+}
 
 // ── POST /api/payments/create-checkout ──────────────────────────────────────
 
 router.post('/create-checkout', requireAuth, async (req, res) => {
   try {
-    const { priceId, successUrl, cancelUrl } = req.body;
+    const { plan } = req.body;
 
-    if (!priceId) {
-      return res.status(400).json({ error: 'priceId is required' });
+    if (!plan || !PLAN_DEFS[plan]) {
+      return res.status(400).json({ error: 'Invalid plan' });
     }
 
-    if (!PRICE_TO_PLAN[priceId]) {
-      return res.status(400).json({ error: 'Invalid priceId' });
+    const priceId = PRICE_IDS[plan];
+    if (!priceId) {
+      return res.status(503).json({ error: 'Billing not yet ready, try again in a moment' });
     }
 
     const user = await getUserById(req.user.id);
@@ -95,13 +129,12 @@ router.post('/create-checkout', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Create or reuse Stripe customer
     let customerId = user.stripe_customer_id;
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email,
         name: user.name,
-        metadata: { writevault_user_id: user.id },
+        metadata: { userId: user.id },
       });
       customerId = customer.id;
       await db.run('UPDATE users SET stripe_customer_id = ? WHERE id = ?', [customerId, user.id]);
@@ -109,14 +142,12 @@ router.post('/create-checkout', requireAuth, async (req, res) => {
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
+      payment_method_types: ['card'],
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: successUrl || 'http://localhost:5173/dashboard?checkout=success',
-      cancel_url: cancelUrl || 'http://localhost:5173/pricing?checkout=cancelled',
-      metadata: {
-        writevault_user_id: user.id,
-        plan: PRICE_TO_PLAN[priceId],
-      },
+      success_url: `${CLIENT_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${CLIENT_URL}/pricing`,
+      metadata: { userId: user.id, plan },
     });
 
     res.json({ checkoutUrl: session.url });
@@ -128,7 +159,7 @@ router.post('/create-checkout', requireAuth, async (req, res) => {
 
 // ── POST /api/payments/webhook ──────────────────────────────────────────────
 
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+router.post('/webhook', async (req, res) => {
   const sig = req.headers['stripe-signature'];
 
   let event;
@@ -143,18 +174,31 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object;
-        const userId = session.metadata?.writevault_user_id;
+        const userId = session.metadata?.userId;
         const plan = session.metadata?.plan;
 
         if (userId && plan) {
-          await updateUserPlan(
-            plan,
-            session.customer,
-            session.subscription,
-            null, // plan_expires_at — managed by Stripe
-            userId
-          );
+          const expiresAt = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60;
+          await updateUserPlan(plan, session.customer, session.subscription, expiresAt, userId);
           console.log(`User ${userId} upgraded to ${plan}`);
+        }
+        break;
+      }
+
+      case 'invoice.payment_succeeded': {
+        const invoice = event.data.object;
+        const customerId = invoice.customer;
+        const user = await getUserByStripeCustomer(customerId);
+        if (user) {
+          const base = Math.max(user.plan_expires_at || 0, Math.floor(Date.now() / 1000));
+          const expiresAt = base + 30 * 24 * 60 * 60;
+          await updateUserPlanByStripeCustomer(
+            user.plan || 'student',
+            user.stripe_subscription_id || invoice.subscription,
+            expiresAt,
+            customerId
+          );
+          console.log(`Customer ${customerId} renewed → expires ${expiresAt}`);
         }
         break;
       }
@@ -170,26 +214,17 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       case 'customer.subscription.updated': {
         const subscription = event.data.object;
         const customerId = subscription.customer;
-
-        // Determine plan from the subscription's price
         const priceId = subscription.items?.data?.[0]?.price?.id;
-        const plan = PRICE_TO_PLAN[priceId];
-
+        const plan = priceToPlan()[priceId];
         if (plan) {
           const expiresAt = subscription.current_period_end || null;
-          await updateUserPlanByStripeCustomer(
-            plan,
-            subscription.id,
-            expiresAt,
-            customerId
-          );
+          await updateUserPlanByStripeCustomer(plan, subscription.id, expiresAt, customerId);
           console.log(`Customer ${customerId} subscription updated to ${plan}`);
         }
         break;
       }
 
       default:
-        // Unhandled event type
         break;
     }
   } catch (err) {
@@ -210,7 +245,7 @@ router.get('/portal', requireAuth, async (req, res) => {
 
     const session = await stripe.billingPortal.sessions.create({
       customer: user.stripe_customer_id,
-      return_url: 'http://localhost:5173/dashboard',
+      return_url: `${CLIENT_URL}/dashboard`,
     });
 
     res.json({ portalUrl: session.url });
@@ -244,3 +279,4 @@ router.get('/status', requireAuth, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.ensureStripeProducts = ensureStripeProducts;
