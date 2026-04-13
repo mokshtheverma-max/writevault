@@ -547,10 +547,10 @@ export default function Landing() {
           <div>
             <p className="text-white font-semibold text-sm mb-4">Company</p>
             <ul className="space-y-2.5 text-sm" style={{ color: '#64748b' }}>
+              <li><a href="/about" className="hover:text-white transition-colors">About</a></li>
               <li><a href="/methodology" className="hover:text-white transition-colors">Methodology</a></li>
               <li><a href="/pricing" className="hover:text-white transition-colors">Pricing</a></li>
               <li><span className="cursor-default">Blog <span className="text-xs opacity-50">(coming soon)</span></span></li>
-              <li><span className="cursor-default">Press Kit <span className="text-xs opacity-50">(coming soon)</span></span></li>
             </ul>
           </div>
 
@@ -560,8 +560,8 @@ export default function Landing() {
             <ul className="space-y-2.5 text-sm" style={{ color: '#64748b' }}>
               <li><a href="mailto:support@writevault.app" className="hover:text-white transition-colors">Contact</a></li>
               <li><a href="/verify/teacher" className="hover:text-white transition-colors">For Educators</a></li>
-              <li><span className="cursor-default">Privacy Policy <span className="text-xs opacity-50">(coming soon)</span></span></li>
-              <li><span className="cursor-default">Terms of Service <span className="text-xs opacity-50">(coming soon)</span></span></li>
+              <li><a href="/privacy" className="hover:text-white transition-colors">Privacy Policy</a></li>
+              <li><a href="/terms" className="hover:text-white transition-colors">Terms of Service</a></li>
             </ul>
           </div>
         </div>
