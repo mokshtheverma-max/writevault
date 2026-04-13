@@ -21,20 +21,36 @@ import Waitlist from './pages/Waitlist'
 import Pricing from './pages/Pricing'
 import Sessions from './pages/Sessions'
 import DNAProfile from './pages/DNAProfile'
+import Onboarding from './pages/Onboarding'
+import PaymentSuccess from './pages/PaymentSuccess'
+import BillingPage from './pages/BillingPage'
 import NotFound from './pages/NotFound'
 import InstallPrompt from './components/InstallPrompt'
 
+const ONBOARDING_KEY = 'wv_onboarding_complete'
+
+function needsOnboarding(user: { sessionCount?: number } | null): boolean {
+  if (!user) return false
+  if (localStorage.getItem(ONBOARDING_KEY)) return false
+  return (user.sessionCount ?? 0) === 0
+}
+
 function RequireAuth({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading, user } = useAuth()
+  const location = useLocation()
   if (isLoading) return <LoadingScreen />
   if (!isAuthenticated) return <Navigate to="/auth" replace />
+  if (needsOnboarding(user) && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />
+  }
   return <>{children}</>
 }
 
 /** Show Landing for guests, Home dashboard for authenticated users */
 function RootRoute() {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading, user } = useAuth()
   if (isLoading) return <LoadingScreen />
+  if (isAuthenticated && needsOnboarding(user)) return <Navigate to="/onboarding" replace />
   return isAuthenticated ? <Home /> : <Landing />
 }
 
@@ -65,6 +81,7 @@ function AnimatedRoutes() {
           <Route path="/editor"                   element={<RequireAuth><Editor /></RequireAuth>} />
           <Route path="/sessions"                 element={<RequireAuth><Sessions /></RequireAuth>} />
           <Route path="/dna"                      element={<RequireAuth><DNAProfile /></RequireAuth>} />
+          <Route path="/onboarding"               element={<RequireAuth><Onboarding /></RequireAuth>} />
           <Route path="/dashboard/:sessionId"     element={<RequireAuth><Dashboard /></RequireAuth>} />
           <Route path="/report/:sessionId"        element={<RequireAuth><Report /></RequireAuth>} />
           <Route path="/verify"                   element={<Verify />} />
@@ -72,6 +89,8 @@ function AnimatedRoutes() {
           <Route path="/verify/:hash"             element={<Verify />} />
           <Route path="/methodology"              element={<Methodology />} />
           <Route path="/pricing"                  element={<Pricing />} />
+          <Route path="/payment-success"          element={<RequireAuth><PaymentSuccess /></RequireAuth>} />
+          <Route path="/billing"                  element={<RequireAuth><BillingPage /></RequireAuth>} />
           <Route path="*"                         element={<NotFound />} />
         </Routes>
       </motion.div>
