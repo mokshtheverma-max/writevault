@@ -8,7 +8,8 @@ import {
   CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import toast from 'react-hot-toast'
 import { Fingerprint, ArrowLeft, FileText, Share2, Lock, Megaphone, AlertCircle } from 'lucide-react'
 import ShareModal from '../components/ShareModal'
 import ShareScoreModal from '../components/ShareScoreModal'
@@ -16,7 +17,8 @@ import UpgradePrompt from '../components/UpgradePrompt'
 import ErrorBoundary from '../components/ErrorBoundary'
 import { Skeleton } from '../components/Skeleton'
 import { usePlan } from '../hooks/usePlan'
-import { loadSession } from '../utils/sessionStorage'
+import { loadSession, deleteSession as deleteLocalSession } from '../utils/sessionStorage'
+import { deleteSessionRemote } from '../utils/api'
 import HumanScoreGauge from '../components/HumanScoreGauge'
 import StatBadge from '../components/StatBadge'
 import type { WritingSession } from '../types'
@@ -415,6 +417,58 @@ export default function Dashboard() {
         const hash = localStorage.getItem(`wv_hash_${session.id}`) ?? ''
         return <ShareModal session={session} hash={hash} onClose={() => setShareOpen(false)} />
       })()}
+
+      {/* Delete confirmation modal */}
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+            onClick={() => !deleting && setShowDeleteConfirm(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.97 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              onClick={e => e.stopPropagation()}
+              className="bg-surface border border-border rounded-2xl shadow-xl p-6 w-full max-w-sm"
+            >
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-danger/10 flex items-center justify-center shrink-0">
+                  <AlertTriangle size={18} className="text-danger" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base font-semibold text-text-primary">Delete this session?</h3>
+                  <p className="text-sm text-text-secondary mt-1 leading-relaxed">
+                    This permanently removes the session and its report. This cannot be undone.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  disabled={deleting}
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="px-4 py-2 text-sm rounded-lg border border-border text-text-secondary hover:text-text-primary hover:bg-elevated disabled:opacity-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={deleting}
+                  onClick={handleDashboardDelete}
+                  className="px-4 py-2 text-sm rounded-lg bg-danger hover:bg-red-600 text-white font-medium disabled:opacity-50 transition-colors inline-flex items-center gap-2"
+                >
+                  {deleting && <span className="w-3 h-3 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />}
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="flex flex-col md:flex-row flex-1 min-h-0">
 
