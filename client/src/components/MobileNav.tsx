@@ -7,6 +7,7 @@ const NAV_LINKS = [
   { label: 'For Educators', href: '/verify/teacher' },
   { label: 'For Schools', href: '/schools' },
   { label: 'How It Works', href: '/methodology' },
+  { label: 'Compare', href: '/compare' },
   { label: 'Pricing', href: '/pricing' },
 ]
 

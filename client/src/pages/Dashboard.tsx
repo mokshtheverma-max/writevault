@@ -8,18 +8,15 @@ import {
   CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
-import toast from 'react-hot-toast'
-import { Fingerprint, ArrowLeft, FileText, Share2, Lock, Megaphone, AlertCircle, MoreVertical, Download, Trash2, AlertTriangle } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Fingerprint, ArrowLeft, FileText, Share2, Lock, Megaphone, AlertCircle } from 'lucide-react'
 import ShareModal from '../components/ShareModal'
 import ShareScoreModal from '../components/ShareScoreModal'
 import UpgradePrompt from '../components/UpgradePrompt'
 import ErrorBoundary from '../components/ErrorBoundary'
 import { Skeleton } from '../components/Skeleton'
 import { usePlan } from '../hooks/usePlan'
-import { loadSession, deleteSession as deleteLocalSession } from '../utils/sessionStorage'
-import { deleteSessionRemote } from '../utils/api'
+import { loadSession } from '../utils/sessionStorage'
 import HumanScoreGauge from '../components/HumanScoreGauge'
 import StatBadge from '../components/StatBadge'
 import type { WritingSession } from '../types'
@@ -223,6 +220,35 @@ export default function Dashboard() {
     }
   }, [sessionId])
 
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDoc = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [menuOpen])
+
+  async function handleDashboardDelete() {
+    if (!data) return
+    const id = data.session.id
+    setDeleting(true)
+    try {
+      deleteLocalSession(id)
+      localStorage.removeItem(`wv_report_${id}`)
+      localStorage.removeItem(`wv_hash_${id}`)
+      localStorage.removeItem(`wv_dna_comparison_${id}`)
+      await deleteSessionRemote(id)
+      toast.success('Session deleted')
+      navigate('/sessions')
+    } catch (e) {
+      console.error('Delete failed:', e)
+      toast.error('Failed to delete session')
+      setDeleting(false)
+      setShowDeleteConfirm(false)
+    }
+  }
+
   const dnaProfile      = DNAManager.getDNAProfile()
   const dnaSessionCount = DNAManager.getSessionCount()
   const dnaConfLevel    = DNAManager.getConfidenceLevel()
@@ -317,6 +343,60 @@ export default function Dashboard() {
             <span className="hidden sm:inline">Generate Report →</span>
             <span className="sm:hidden">Report</span>
           </button>
+
+          {/* Three-dots dropdown */}
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setMenuOpen(o => !o)}
+              className="p-2.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-elevated transition-colors"
+              aria-label="More actions"
+              title="More actions"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+            <AnimatePresence>
+              {menuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                  transition={{ duration: 0.14, ease: 'easeOut' }}
+                  className="absolute right-0 mt-2 w-56 bg-surface border border-border rounded-lg shadow-xl z-30 py-1 overflow-hidden"
+                >
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false)
+                      if (canExportPDF) navigate(`/report/${session.id}`)
+                      else setShowUpgrade(true)
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-elevated transition-colors text-left"
+                  >
+                    <Download className="w-4 h-4" /> Download Report
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false)
+                      if (canShareTeacher) setShareOpen(true)
+                      else setShowUpgrade(true)
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-elevated transition-colors text-left"
+                  >
+                    <Share2 className="w-4 h-4" /> Share With Teacher
+                  </button>
+                  <div className="h-px bg-border my-1" />
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false)
+                      setShowDeleteConfirm(true)
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-danger hover:text-red-400 hover:bg-danger/5 transition-colors text-left"
+                  >
+                    <Trash2 className="w-4 h-4" /> Delete Session
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </header>
 

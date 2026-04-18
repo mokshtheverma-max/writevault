@@ -14,6 +14,8 @@ import Verify from './pages/Verify'
 import TeacherVerify from './pages/TeacherVerify'
 import Methodology from './pages/Methodology'
 import Auth from './pages/Auth'
+import AuthCallback from './pages/AuthCallback'
+import ProfilePage from './pages/ProfilePage'
 import ForgotPassword from './pages/ForgotPassword'
 import Waitlist from './pages/Waitlist'
 import Pricing from './pages/Pricing'
@@ -86,6 +88,8 @@ function AnimatedRoutes() {
             <Routes location={location}>
               <Route path="/"                         element={<RootRoute />} />
               <Route path="/auth"                     element={<Auth />} />
+              <Route path="/auth/callback"            element={<AuthCallback />} />
+              <Route path="/profile"                  element={<RequireAuth><ProfilePage /></RequireAuth>} />
               <Route path="/forgot-password"            element={<ForgotPassword />} />
               <Route path="/waitlist"                 element={<Waitlist />} />
               <Route path="/editor"                   element={<RequireAuth><Editor /></RequireAuth>} />

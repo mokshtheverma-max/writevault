@@ -6,4 +6,6 @@
   <url><loc>https://writevault.app/waitlist</loc><priority>0.8</priority></url>
   <url><loc>https://writevault.app/verify/teacher</loc><priority>0.7</priority></url>
   <url><loc>https://writevault.app/schools</loc><priority>0.8</priority></url>
+  <url><loc>https://writevault.app/compare</loc><priority>0.8</priority></url>
+  <url><loc>https://writevault.app/vs-turnitin</loc><priority>0.8</priority></url>
 </urlset>

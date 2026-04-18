@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import { AnimatePresence, motion } from 'framer-motion'
 import { listSessions, deleteSession as deleteLocalSession } from '../utils/sessionStorage'
 import { deleteSessionRemote } from '../utils/api'
 import type { WritingSession } from '../types'
@@ -12,6 +13,8 @@ import {
   ChevronRight,
   Download,
   Share2,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react'
 import ErrorBoundary from '../components/ErrorBoundary'
 import { SkeletonRow } from '../components/Skeleton'

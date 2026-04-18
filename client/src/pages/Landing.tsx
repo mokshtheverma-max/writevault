@@ -546,6 +546,7 @@ export default function Landing() {
               <li><a href="/dna" className="hover:text-white transition-colors">Writing DNA</a></li>
               <li><a href="/pricing" className="hover:text-white transition-colors">PDF Reports</a></li>
               <li><a href="/verify/teacher" className="hover:text-white transition-colors">Teacher Portal</a></li>
+              <li><a href="/compare" className="hover:text-white transition-colors">vs Turnitin</a></li>
             </ul>
           </div>
 
