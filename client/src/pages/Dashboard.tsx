@@ -10,7 +10,8 @@ import {
 } from 'recharts'
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Fingerprint, ArrowLeft, FileText, Share2, Lock, Megaphone, AlertCircle } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Fingerprint, ArrowLeft, FileText, Share2, Lock, Megaphone, AlertCircle, MoreVertical, Download, Trash2, AlertTriangle } from 'lucide-react'
 import ShareModal from '../components/ShareModal'
 import ShareScoreModal from '../components/ShareScoreModal'
 import UpgradePrompt from '../components/UpgradePrompt'
@@ -434,7 +435,7 @@ export default function Dashboard() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.97 }}
               transition={{ duration: 0.18, ease: 'easeOut' }}
-              onClick={e => e.stopPropagation()}
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
               className="bg-surface border border-border rounded-2xl shadow-xl p-6 w-full max-w-sm"
             >
               <div className="flex items-start gap-3 mb-4">
