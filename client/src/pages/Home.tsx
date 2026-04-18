@@ -20,6 +20,8 @@ import {
   Share2,
   ChevronRight,
   Zap,
+  ShieldCheck,
+  Search,
 } from 'lucide-react'
 import BottomTabBar from '../components/BottomTabBar'
 import ErrorBoundary from '../components/ErrorBoundary'
@@ -63,13 +65,21 @@ function scoreBg(score: number): string {
 
 /* ── Nav links ────────────────────────────────────────────────────────── */
 
-const NAV_LINKS = [
+const STUDENT_NAV_LINKS = [
   { to: '/',                icon: House,         label: 'Home' },
   { to: '/editor',          icon: PenLine,       label: 'New Essay' },
   { to: '/sessions',        icon: History,       label: 'My Sessions' },
   { to: '/dna',             icon: Fingerprint,   label: 'Writing DNA' },
   { to: '/pricing',         icon: Sparkles,      label: 'Pricing' },
   { to: '/verify/teacher',  icon: GraduationCap, label: 'For Educators' },
+]
+
+const TEACHER_NAV_LINKS = [
+  { to: '/',                icon: House,         label: 'Home' },
+  { to: '/teacher',         icon: ShieldCheck,   label: 'Educator Dashboard' },
+  { to: '/verify/teacher',  icon: Search,        label: 'Verify Session' },
+  { to: '/sessions',        icon: History,       label: 'My Sessions' },
+  { to: '/pricing',         icon: Sparkles,      label: 'Pricing' },
 ]
 
 /* ── Component ────────────────────────────────────────────────────────── */
@@ -113,6 +123,8 @@ export default function Home() {
   const dnaSessionCount = DNAManager.getSessionCount()
 
   const firstName = user?.name?.split(' ')[0] ?? 'Writer'
+  const isTeacher = user?.role === 'teacher' || user?.role === 'admin'
+  const NAV_LINKS = isTeacher ? TEACHER_NAV_LINKS : STUDENT_NAV_LINKS
 
   return (
     <div className="flex min-h-screen md:h-screen bg-base text-text-primary md:overflow-hidden">
@@ -362,30 +374,61 @@ export default function Home() {
           {/* Quick Actions */}
           <section className="mb-10">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Link
-                to="/editor"
-                className="bg-primary hover:bg-primary-hover text-white rounded-xl p-5 transition-colors group"
-              >
-                <PenLine size={22} className="mb-2" />
-                <div className="font-medium text-sm">Write New Essay</div>
-                <div className="text-xs text-white/70 mt-0.5">Start a new recorded session</div>
-              </Link>
-              <Link
-                to="/verify/teacher"
-                className="bg-surface border border-border hover:border-border-light rounded-xl p-5 transition-colors group"
-              >
-                <Shield size={22} className="mb-2 text-primary" />
-                <div className="font-medium text-sm text-text-primary">Verify a Session</div>
-                <div className="text-xs text-text-muted mt-0.5">Cryptographic proof lookup</div>
-              </Link>
-              <Link
-                to="/sessions"
-                className="bg-surface border border-border hover:border-border-light rounded-xl p-5 transition-colors group"
-              >
-                <Share2 size={22} className="mb-2 text-primary" />
-                <div className="font-medium text-sm text-text-primary">Share With Teacher</div>
-                <div className="text-xs text-text-muted mt-0.5">Send proof to your educator</div>
-              </Link>
+              {isTeacher ? (
+                <>
+                  <Link
+                    to="/verify/teacher"
+                    className="bg-primary hover:bg-primary-hover text-white rounded-xl p-5 transition-colors group"
+                  >
+                    <Shield size={22} className="mb-2" />
+                    <div className="font-medium text-sm">Verify a Session</div>
+                    <div className="text-xs text-white/70 mt-0.5">Cryptographic proof lookup</div>
+                  </Link>
+                  <Link
+                    to="/teacher"
+                    className="bg-surface border border-border hover:border-border-light rounded-xl p-5 transition-colors group"
+                  >
+                    <ShieldCheck size={22} className="mb-2 text-primary" />
+                    <div className="font-medium text-sm text-text-primary">Educator Dashboard</div>
+                    <div className="text-xs text-text-muted mt-0.5">Bulk verify &amp; history</div>
+                  </Link>
+                  <Link
+                    to="/sessions"
+                    className="bg-surface border border-border hover:border-border-light rounded-xl p-5 transition-colors group"
+                  >
+                    <History size={22} className="mb-2 text-primary" />
+                    <div className="font-medium text-sm text-text-primary">My Sessions</div>
+                    <div className="text-xs text-text-muted mt-0.5">Your writing archive</div>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to="/editor"
+                    className="bg-primary hover:bg-primary-hover text-white rounded-xl p-5 transition-colors group"
+                  >
+                    <PenLine size={22} className="mb-2" />
+                    <div className="font-medium text-sm">Write New Essay</div>
+                    <div className="text-xs text-white/70 mt-0.5">Start a new recorded session</div>
+                  </Link>
+                  <Link
+                    to="/verify/teacher"
+                    className="bg-surface border border-border hover:border-border-light rounded-xl p-5 transition-colors group"
+                  >
+                    <Shield size={22} className="mb-2 text-primary" />
+                    <div className="font-medium text-sm text-text-primary">Verify a Session</div>
+                    <div className="text-xs text-text-muted mt-0.5">Cryptographic proof lookup</div>
+                  </Link>
+                  <Link
+                    to="/sessions"
+                    className="bg-surface border border-border hover:border-border-light rounded-xl p-5 transition-colors group"
+                  >
+                    <Share2 size={22} className="mb-2 text-primary" />
+                    <div className="font-medium text-sm text-text-primary">Share With Teacher</div>
+                    <div className="text-xs text-text-muted mt-0.5">Send proof to your educator</div>
+                  </Link>
+                </>
+              )}
             </div>
           </section>
 

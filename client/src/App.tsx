@@ -32,10 +32,11 @@ import DetectorComparison from './pages/DetectorComparison'
 import VsTurnitin from './pages/VsTurnitin'
 import InstallPrompt from './components/InstallPrompt'
 
-const Dashboard  = lazy(() => import('./pages/Dashboard'))
-const Report     = lazy(() => import('./pages/Report'))
-const DNAProfile = lazy(() => import('./pages/DNAProfile'))
-const Blog       = lazy(() => import('./pages/Blog'))
+const Dashboard        = lazy(() => import('./pages/Dashboard'))
+const Report           = lazy(() => import('./pages/Report'))
+const DNAProfile       = lazy(() => import('./pages/DNAProfile'))
+const Blog             = lazy(() => import('./pages/Blog'))
+const TeacherDashboard = lazy(() => import('./pages/TeacherDashboard'))
 
 const ONBOARDING_KEY = 'wv_onboarding_complete'
 
@@ -53,6 +54,14 @@ function RequireAuth({ children }: { children: ReactNode }) {
   if (needsOnboarding(user) && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />
   }
+  return <>{children}</>
+}
+
+function RequireTeacher({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isLoading, user } = useAuth()
+  if (isLoading) return <LoadingScreen />
+  if (!isAuthenticated) return <Navigate to="/auth" replace />
+  if (user?.role !== 'teacher' && user?.role !== 'admin') return <Navigate to="/" replace />
   return <>{children}</>
 }
 
@@ -112,6 +121,7 @@ function AnimatedRoutes() {
               <Route path="/blog"                     element={<Blog />} />
               <Route path="/payment-success"          element={<RequireAuth><PaymentSuccess /></RequireAuth>} />
               <Route path="/billing"                  element={<RequireAuth><BillingPage /></RequireAuth>} />
+              <Route path="/teacher"                  element={<RequireTeacher><TeacherDashboard /></RequireTeacher>} />
               <Route path="*"                         element={<NotFound />} />
             </Routes>
           </Suspense>
