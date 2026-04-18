@@ -158,9 +158,12 @@ export default function Home() {
 
         {/* Bottom */}
         <div className="px-3 pb-4 space-y-0.5 border-t border-border pt-3">
-          <button className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:bg-elevated w-full transition-colors">
+          <Link
+            to="/profile"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:bg-elevated w-full transition-colors"
+          >
             <Settings size={18} /> Settings
-          </button>
+          </Link>
           <button
             onClick={logout}
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-text-secondary hover:text-danger hover:bg-danger/5 w-full transition-colors"

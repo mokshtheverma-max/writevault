@@ -12,6 +12,9 @@ const {
   updateLastLogin,
   updateDnaData,
   updateUserPassword,
+  updateUserPasswordById,
+  updateUserProfile,
+  deleteUserById,
   insertWaitlistEntry,
   getWaitlistCount,
   getWaitlistByEmail,
@@ -298,6 +301,108 @@ router.post('/reset-password', async (req, res) => {
   } catch (err) {
     console.error('Reset password error:', err);
     res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+// ── PUT /api/auth/profile ───────────────────────────────────────────────────
+
+router.put('/profile', requireAuth, async (req, res) => {
+  try {
+    const { name, email } = req.body;
+    if (!name || !email) {
+      return res.status(400).json({ error: 'Name and email are required' });
+    }
+
+    const trimmedName = name.trim();
+    const normalizedEmail = email.toLowerCase().trim();
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    if (normalizedEmail !== req.user.email) {
+      const existing = await getUserByEmail(normalizedEmail);
+      if (existing && existing.id !== req.user.id) {
+        return res.status(409).json({ error: 'That email is already taken' });
+      }
+    }
+
+    await updateUserProfile(trimmedName, normalizedEmail, req.user.id);
+    const updated = await getUserById(req.user.id);
+
+    res.json({
+      id: updated.id,
+      email: updated.email,
+      name: updated.name,
+      role: updated.role,
+    });
+  } catch (err) {
+    console.error('Profile update error:', err);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// ── PUT /api/auth/change-password ───────────────────────────────────────────
+
+router.put('/change-password', requireAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+
+    const user = await getUserById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if ((user.password_hash || '').startsWith('GOOGLE_AUTH_')) {
+      return res.status(400).json({ error: 'This account uses Google sign-in. Set a password is not available.' });
+    }
+
+    const valid = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!valid) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    const hash = await bcrypt.hash(newPassword, 12);
+    await updateUserPasswordById(hash, user.id);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Change password error:', err);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
+// ── DELETE /api/auth/account ────────────────────────────────────────────────
+
+router.delete('/account', requireAuth, async (req, res) => {
+  try {
+    const { password } = req.body;
+    const user = await getUserById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const isGoogleAccount = (user.password_hash || '').startsWith('GOOGLE_AUTH_');
+
+    if (!isGoogleAccount) {
+      if (!password) {
+        return res.status(400).json({ error: 'Password is required to delete your account' });
+      }
+      const valid = await bcrypt.compare(password, user.password_hash);
+      if (!valid) {
+        return res.status(401).json({ error: 'Incorrect password' });
+      }
+    }
+
+    await deleteUserById(user.id);
+
+    res.json({ success: true, message: 'Account deleted' });
+  } catch (err) {
+    console.error('Delete account error:', err);
+    res.status(500).json({ error: 'Failed to delete account' });
   }
 });
 

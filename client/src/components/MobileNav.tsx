@@ -5,6 +5,7 @@ import { Menu, X } from 'lucide-react'
 
 const NAV_LINKS = [
   { label: 'For Educators', href: '/verify/teacher' },
+  { label: 'For Schools', href: '/schools' },
   { label: 'How It Works', href: '/methodology' },
   { label: 'Pricing', href: '/pricing' },
 ]

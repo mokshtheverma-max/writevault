@@ -1,0 +1,32 @@
+{
+  "name": "WriteVault",
+  "short_name": "WriteVault",
+  "description": "Prove your writing is human",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07070f",
+  "theme_color": "#6366f1",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "categories": ["education", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Write Essay",
+      "url": "/editor",
+      "description": "Start a new writing session"
+    },
+    {
+      "name": "My Sessions",
+      "url": "/sessions",
+      "description": "View your writing history"
+    }
+  ]
+}

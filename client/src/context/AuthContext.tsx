@@ -19,6 +19,8 @@ interface AuthContextValue {
   token: string | null
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, name: string, role: string) => Promise<void>
+  loginWithToken: (token: string) => void
+  refreshUser: () => Promise<void>
   logout: () => void
   isAuthenticated: boolean
   isLoading: boolean
@@ -100,8 +102,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
+  const loginWithToken = useCallback((newToken: string) => {
+    localStorage.setItem(TOKEN_KEY, newToken)
+    setToken(newToken)
+    setIsLoading(true)
+  }, [])
+
+  const refreshUser = useCallback(async () => {
+    const t = localStorage.getItem(TOKEN_KEY)
+    if (!t) return
+    const res = await fetch(`${API}/auth/me`, {
+      headers: { Authorization: `Bearer ${t}` },
+    })
+    if (!res.ok) return
+    const data = await res.json()
+    setUser({
+      id: data.id, email: data.email, name: data.name, role: data.role,
+      sessionCount: data.sessionCount, hasDna: data.hasDna,
+      referralCode: data.referralCode, referralCount: data.referralCount,
+      bonusSessions: data.bonusSessions,
+    })
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, isAuthenticated: !!user, isLoading }}>
+    <AuthContext.Provider value={{ user, token, login, register, loginWithToken, refreshUser, logout, isAuthenticated: !!user, isLoading }}>
       {children}
     </AuthContext.Provider>
   )

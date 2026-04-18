@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { listSessions } from '../utils/sessionStorage'
+import toast from 'react-hot-toast'
+import { listSessions, deleteSession as deleteLocalSession } from '../utils/sessionStorage'
+import { deleteSessionRemote } from '../utils/api'
 import type { WritingSession } from '../types'
 import {
   Search,
@@ -55,6 +57,29 @@ export default function Sessions() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [deleteTarget, setDeleteTarget] = useState<WritingSession | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return
+    const id = deleteTarget.id
+    setDeleting(true)
+    try {
+      deleteLocalSession(id)
+      localStorage.removeItem(`wv_report_${id}`)
+      localStorage.removeItem(`wv_hash_${id}`)
+      localStorage.removeItem(`wv_dna_comparison_${id}`)
+      await deleteSessionRemote(id)
+      setSessions(prev => (prev ? prev.filter(s => s.id !== id) : prev))
+      toast.success('Session deleted')
+    } catch (e) {
+      console.error('Delete failed:', e)
+      toast.error('Failed to delete session')
+    } finally {
+      setDeleting(false)
+      setDeleteTarget(null)
+    }
+  }
 
   useEffect(() => {
     try {
@@ -185,63 +210,129 @@ export default function Sessions() {
           </div>
         ) : (
           <div className="space-y-3">
-            {filtered.map(session => {
-              const words = session.content.trim().split(/\s+/).filter(Boolean).length
-              const duration = formatDuration(session.endTime - session.startTime)
-              return (
-                <div
-                  key={session.id}
-                  className="bg-surface border border-border rounded-xl p-5 hover:border-border-light transition-all cursor-pointer group"
-                  onClick={() => navigate(`/dashboard/${session.id}`)}
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <FileText size={18} className="text-text-muted shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-text-primary truncate">{session.title}</div>
-                        <div className="text-xs text-text-muted">{formatDate(session.startTime)}</div>
+            <AnimatePresence initial={false}>
+              {filtered.map(session => {
+                const words = session.content.trim().split(/\s+/).filter(Boolean).length
+                const duration = formatDuration(session.endTime - session.startTime)
+                return (
+                  <motion.div
+                    key={session.id}
+                    layout
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: -24, height: 0, marginTop: 0, marginBottom: 0, padding: 0, overflow: 'hidden' }}
+                    transition={{ duration: 0.22, ease: 'easeOut' }}
+                    className="bg-surface border border-border rounded-xl p-5 hover:border-border-light transition-all cursor-pointer group"
+                    onClick={() => navigate(`/dashboard/${session.id}`)}
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <FileText size={18} className="text-text-muted shrink-0" />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-text-primary truncate">{session.title}</div>
+                          <div className="text-xs text-text-muted">{formatDate(session.startTime)}</div>
+                        </div>
+                      </div>
+                      <div className="hidden md:flex items-center gap-6 text-xs text-text-secondary shrink-0">
+                        <span>{words.toLocaleString()} words</span>
+                        <span className="flex items-center gap-1"><Clock size={12} /> {duration}</span>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className={`text-sm font-bold px-2.5 py-1 rounded-lg border ${scoreBg(session.humanScore)}`}>
+                          {session.humanScore}
+                        </span>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={e => { e.stopPropagation(); navigate(`/dashboard/${session.id}`) }}
+                            className="text-xs text-primary hover:text-primary-hover flex items-center gap-0.5"
+                            title="View Dashboard"
+                          >
+                            View <ChevronRight size={12} />
+                          </button>
+                          <button
+                            onClick={e => { e.stopPropagation(); navigate(`/report/${session.id}`) }}
+                            className="p-1.5 text-text-muted hover:text-text-primary rounded-lg hover:bg-elevated transition-colors"
+                            title="Download Report"
+                          >
+                            <Download size={14} />
+                          </button>
+                          <button
+                            onClick={e => { e.stopPropagation(); navigate(`/dashboard/${session.id}`) }}
+                            className="p-1.5 text-text-muted hover:text-text-primary rounded-lg hover:bg-elevated transition-colors"
+                            title="Share"
+                          >
+                            <Share2 size={14} />
+                          </button>
+                          <button
+                            onClick={e => { e.stopPropagation(); setDeleteTarget(session) }}
+                            className="p-1.5 text-danger hover:text-red-400 rounded-lg hover:bg-danger/10 transition-colors"
+                            title="Delete session"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                    <div className="hidden md:flex items-center gap-6 text-xs text-text-secondary shrink-0">
-                      <span>{words.toLocaleString()} words</span>
-                      <span className="flex items-center gap-1"><Clock size={12} /> {duration}</span>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className={`text-sm font-bold px-2.5 py-1 rounded-lg border ${scoreBg(session.humanScore)}`}>
-                        {session.humanScore}
-                      </span>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={e => { e.stopPropagation(); navigate(`/dashboard/${session.id}`) }}
-                          className="text-xs text-primary hover:text-primary-hover flex items-center gap-0.5"
-                          title="View Dashboard"
-                        >
-                          View <ChevronRight size={12} />
-                        </button>
-                        <button
-                          onClick={e => { e.stopPropagation(); navigate(`/report/${session.id}`) }}
-                          className="p-1.5 text-text-muted hover:text-text-primary rounded-lg hover:bg-elevated transition-colors"
-                          title="Download Report"
-                        >
-                          <Download size={14} />
-                        </button>
-                        <button
-                          onClick={e => { e.stopPropagation(); navigate(`/dashboard/${session.id}`) }}
-                          className="p-1.5 text-text-muted hover:text-text-primary rounded-lg hover:bg-elevated transition-colors"
-                          title="Share"
-                        >
-                          <Share2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
+                  </motion.div>
+                )
+              })}
+            </AnimatePresence>
           </div>
         )}
         </ErrorBoundary>
       </div>
+
+      {/* Delete confirmation modal */}
+      <AnimatePresence>
+        {deleteTarget && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+            onClick={() => !deleting && setDeleteTarget(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.97 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              onClick={e => e.stopPropagation()}
+              className="bg-surface border border-border rounded-2xl shadow-xl p-6 w-full max-w-sm"
+            >
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-danger/10 flex items-center justify-center shrink-0">
+                  <AlertTriangle size={18} className="text-danger" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base font-semibold text-text-primary">Delete this session?</h3>
+                  <p className="text-sm text-text-secondary mt-1 leading-relaxed">
+                    This permanently removes the session and its report. This cannot be undone.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  disabled={deleting}
+                  onClick={() => setDeleteTarget(null)}
+                  className="px-4 py-2 text-sm rounded-lg border border-border text-text-secondary hover:text-text-primary hover:bg-elevated disabled:opacity-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={deleting}
+                  onClick={handleConfirmDelete}
+                  className="px-4 py-2 text-sm rounded-lg bg-danger hover:bg-red-600 text-white font-medium disabled:opacity-50 transition-colors inline-flex items-center gap-2"
+                >
+                  {deleting && <span className="w-3 h-3 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />}
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

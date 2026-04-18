@@ -74,7 +74,9 @@ export default function Landing() {
 
         <div className="hidden md:flex items-center gap-6">
           <NavLink href="/methodology">How It Works</NavLink>
+          <NavLink href="/compare">Compare</NavLink>
           <NavLink href="/verify/teacher">For Educators</NavLink>
+          <NavLink href="/schools">For Schools</NavLink>
           <NavLink href="/blog">Blog</NavLink>
           <NavLink href="/pricing">Pricing</NavLink>
         </div>

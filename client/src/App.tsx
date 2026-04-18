@@ -25,6 +25,9 @@ import NotFound from './pages/NotFound'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsOfService from './pages/TermsOfService'
 import AboutPage from './pages/AboutPage'
+import ForSchools from './pages/ForSchools'
+import DetectorComparison from './pages/DetectorComparison'
+import VsTurnitin from './pages/VsTurnitin'
 import InstallPrompt from './components/InstallPrompt'
 
 const Dashboard  = lazy(() => import('./pages/Dashboard'))
@@ -99,6 +102,9 @@ function AnimatedRoutes() {
               <Route path="/privacy"                  element={<PrivacyPolicy />} />
               <Route path="/terms"                    element={<TermsOfService />} />
               <Route path="/about"                    element={<AboutPage />} />
+              <Route path="/schools"                  element={<ForSchools />} />
+              <Route path="/compare"                  element={<DetectorComparison />} />
+              <Route path="/vs-turnitin"              element={<VsTurnitin />} />
               <Route path="/blog"                     element={<Blog />} />
               <Route path="/payment-success"          element={<RequireAuth><PaymentSuccess /></RequireAuth>} />
               <Route path="/billing"                  element={<RequireAuth><BillingPage /></RequireAuth>} />

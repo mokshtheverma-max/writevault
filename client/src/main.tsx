@@ -7,6 +7,14 @@ import App from './App.tsx'
 // Ensure dark mode class is applied
 document.documentElement.classList.add('dark')
 
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .catch(err => console.error('SW registration failed:', err))
+  })
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>

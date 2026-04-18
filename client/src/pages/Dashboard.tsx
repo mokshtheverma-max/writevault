@@ -8,15 +8,18 @@ import {
   CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { useEffect, useState } from 'react'
-import { Fingerprint, ArrowLeft, FileText, Share2, Lock, Megaphone, AlertCircle } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import toast from 'react-hot-toast'
+import { Fingerprint, ArrowLeft, FileText, Share2, Lock, Megaphone, AlertCircle, MoreVertical, Download, Trash2, AlertTriangle } from 'lucide-react'
 import ShareModal from '../components/ShareModal'
 import ShareScoreModal from '../components/ShareScoreModal'
 import UpgradePrompt from '../components/UpgradePrompt'
 import ErrorBoundary from '../components/ErrorBoundary'
 import { Skeleton } from '../components/Skeleton'
 import { usePlan } from '../hooks/usePlan'
-import { loadSession } from '../utils/sessionStorage'
+import { loadSession, deleteSession as deleteLocalSession } from '../utils/sessionStorage'
+import { deleteSessionRemote } from '../utils/api'
 import HumanScoreGauge from '../components/HumanScoreGauge'
 import StatBadge from '../components/StatBadge'
 import type { WritingSession } from '../types'
@@ -186,6 +189,10 @@ export default function Dashboard() {
   const [shareOpen, setShareOpen] = useState(false)
   const [shareScoreOpen, setShareScoreOpen] = useState(false)
   const [showUpgrade, setShowUpgrade] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   const { canExportPDF, canShareTeacher, canUseDNA } = usePlan()
 
   const [data, setData] = useState<DashboardData | null>(null)

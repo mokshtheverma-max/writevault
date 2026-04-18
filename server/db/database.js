@@ -131,6 +131,21 @@ const updateDnaData = (data, id) => dbRun('UPDATE users SET dna_data = ? WHERE i
 
 const updateUserPassword = (hash, email) => dbRun('UPDATE users SET password_hash = ? WHERE email = ?', [hash, email]);
 
+const updateUserPasswordById = (hash, id) => dbRun('UPDATE users SET password_hash = ? WHERE id = ?', [hash, id]);
+
+const updateUserProfile = (name, email, id) => dbRun(
+  'UPDATE users SET name = ?, email = ? WHERE id = ?', [name, email, id]
+);
+
+const deleteUserById = async (id) => {
+  await dbRun('DELETE FROM session_verifications WHERE session_id IN (SELECT id FROM sessions WHERE user_id = ?)', [id]);
+  await dbRun('DELETE FROM sessions WHERE user_id = ?', [id]);
+  await dbRun('DELETE FROM referrals WHERE referrer_user_id = ? OR referred_user_id = ?', [id, id]);
+  await dbRun('DELETE FROM rewards WHERE user_id = ?', [id]);
+  await dbRun('DELETE FROM auth_tokens WHERE user_id = ?', [id]);
+  return dbRun('DELETE FROM users WHERE id = ?', [id]);
+};
+
 const insertWaitlistEntry = (p) => dbRun(
   `INSERT INTO waitlist (id, email, name, role, school, referrer, joined_at)
    VALUES (?, ?, ?, ?, ?, ?, unixepoch())`,
@@ -212,6 +227,25 @@ const getSessionsByUserId = (userId) => dbAll(
   [userId]
 );
 
+const deleteSessionById = (id) => dbRun('DELETE FROM sessions WHERE id = ?', [id]);
+
+const deleteVerificationsBySessionId = (sessionId) => dbRun(
+  'DELETE FROM session_verifications WHERE session_id = ?', [sessionId]
+);
+
+const getRecentVerificationsByIp = (ip, limit) => dbAll(
+  `SELECT v.id, v.session_id, v.verified_at, s.title, s.human_score, s.sha256_hash, s.created_at
+   FROM session_verifications v
+   JOIN sessions s ON s.id = v.session_id
+   WHERE v.verifier_ip = ?
+   ORDER BY v.verified_at DESC
+   LIMIT ?`, [ip, limit]
+);
+
+const countVerificationsByIp = (ip) => dbGet(
+  'SELECT COUNT(*) as count FROM session_verifications WHERE verifier_ip = ?', [ip]
+);
+
 // ── Exported db helper for inline queries in other files ────────────────────
 
 const db = {
@@ -254,4 +288,11 @@ module.exports = {
   insertReward,
   getSessionsByUserId,
   updateUserPassword,
+  updateUserPasswordById,
+  updateUserProfile,
+  deleteUserById,
+  deleteSessionById,
+  deleteVerificationsBySessionId,
+  getRecentVerificationsByIp,
+  countVerificationsByIp,
 };

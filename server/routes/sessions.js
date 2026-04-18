@@ -9,9 +9,13 @@ const {
   insertVerification,
   getVerificationCount,
   incrementSessionsUsed,
+  deleteSessionById,
+  deleteVerificationsBySessionId,
 } = require('../db/database');
 const { recomputeScore } = require('../utils/scoring');
 const { checkSessionLimit } = require('../middleware/planGate');
+const { requireAuth } = require('../middleware/auth');
+const { requireRole } = require('../middleware/requireRole');
 
 const router = express.Router();
 
@@ -385,6 +389,90 @@ router.post('/verify', verifyLimiter, async (req, res) => {
   } catch (err) {
     console.error('Verify endpoint error:', err);
     res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+// DELETE /api/sessions/:id — delete own session
+router.delete('/:id', requireAuth, async (req, res) => {
+  try {
+    const session = await getSessionById(req.params.id);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    if (session.user_id && session.user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Not authorized to delete this session' });
+    }
+    await deleteVerificationsBySessionId(session.id);
+    await deleteSessionById(session.id);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete session error:', err);
+    res.status(500).json({ error: 'Failed to delete session' });
+  }
+});
+
+// POST /api/sessions/verify-bulk — teacher bulk verification by IDs or hashes
+router.post('/verify-bulk', requireAuth, requireRole('teacher'), async (req, res) => {
+  try {
+    const { sessionIds } = req.body || {};
+    if (!Array.isArray(sessionIds)) {
+      return res.status(400).json({ error: 'sessionIds must be an array' });
+    }
+    if (sessionIds.length === 0) {
+      return res.json({ results: [] });
+    }
+    if (sessionIds.length > 50) {
+      return res.status(400).json({ error: 'Maximum 50 session IDs at once' });
+    }
+
+    const results = [];
+    for (const raw of sessionIds) {
+      const id = String(raw || '').trim();
+      if (!id) {
+        results.push({ input: raw, found: false, error: 'Empty input' });
+        continue;
+      }
+
+      let session = await getSessionById(id);
+      if (!session) {
+        session = await getSessionByHash(id.toLowerCase());
+      }
+
+      if (!session) {
+        results.push({ input: id, found: false, error: 'Not found' });
+        continue;
+      }
+
+      try {
+        await insertVerification({
+          id: randomUUID(),
+          session_id: session.id,
+          verifier_ip: req.ip,
+        });
+      } catch { /* non-fatal */ }
+
+      const metadata = JSON.parse(session.metadata);
+      const wordCount = session.content.trim().split(/\s+/).filter(Boolean).length;
+
+      results.push({
+        input: id,
+        found: true,
+        id: session.id,
+        title: session.title,
+        humanScore: session.human_score,
+        sha256Hash: session.sha256_hash,
+        startTime: session.start_time,
+        endTime: session.end_time,
+        createdAt: session.created_at,
+        wordCount,
+        metadata,
+      });
+    }
+
+    res.json({ results });
+  } catch (err) {
+    console.error('Bulk verify error:', err);
+    res.status(500).json({ error: 'Bulk verification failed' });
   }
 });
 

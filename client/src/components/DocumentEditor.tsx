@@ -263,10 +263,20 @@ const DocumentEditor = forwardRef<HTMLDivElement, DocumentEditorProps>(
     const [showFinishModal, setShowFinishModal] = useState(false)
     const [showTablePicker, setShowTablePicker] = useState(false)
     const [showMobileMore, setShowMobileMore] = useState(false)
+    const [isMobile, setIsMobile] = useState(
+      typeof window !== 'undefined' ? window.innerWidth < 768 : false,
+    )
     const scrollRef = useRef<HTMLDivElement>(null)
     const [pages, setPages] = useState(1)
     const [currentPage, setCurrentPage] = useState(1)
     const savedSelection = useRef<Range | null>(null)
+
+    /* ── Viewport listener ──────────────────────────────────────── */
+    useEffect(() => {
+      const handler = () => setIsMobile(window.innerWidth < 768)
+      window.addEventListener('resize', handler)
+      return () => window.removeEventListener('resize', handler)
+    }, [])
 
     // Formatting state
     const [currentFont, setCurrentFont] = useState('Times New Roman')
@@ -410,6 +420,101 @@ const DocumentEditor = forwardRef<HTMLDivElement, DocumentEditorProps>(
       CONTENT_HEIGHT,
       pages * CONTENT_HEIGHT + (pages - 1) * (PAGE_PADDING * 2 + PAGE_GAP),
     )
+
+    /* ── Mobile simplified writing mode ─────────────────────────── */
+    if (isMobile) {
+      return (
+        <div className="flex flex-col bg-white" style={{ height: '100dvh' }}>
+          {/* Header: title + rec + finish */}
+          <div className="flex items-center gap-2 p-3 border-b border-gray-200 bg-white shrink-0">
+            <input
+              type="text"
+              value={sessionTitle}
+              onChange={e => onTitleChange(e.target.value)}
+              placeholder="Untitled"
+              className="font-semibold text-sm text-gray-700 flex-1 outline-none bg-transparent min-w-0"
+            />
+            {isRecording && (
+              <span className="text-xs text-red-500 font-medium shrink-0 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                REC
+              </span>
+            )}
+            <button
+              onClick={handleFinishClick}
+              disabled={!canFinish || isAnalyzing}
+              className="bg-indigo-600 text-white text-sm px-4 py-2 rounded-lg font-medium shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isAnalyzing ? '...' : 'Finish'}
+            </button>
+          </div>
+
+          {/* Minimal toolbar */}
+          <div className="flex items-center gap-1 px-3 py-2 border-b border-gray-100 bg-gray-50 shrink-0">
+            <TBtn title="Bold" active={isBold} onClick={() => exec('bold')}>
+              <span className="font-bold text-base leading-none">B</span>
+            </TBtn>
+            <TBtn title="Italic" active={isItalic} onClick={() => exec('italic')}>
+              <span className="italic text-base leading-none font-serif">I</span>
+            </TBtn>
+            <TBtn title="Undo" onClick={() => exec('undo')}>
+              <Undo2 size={18} />
+            </TBtn>
+          </div>
+
+          {/* Full screen editor */}
+          <div
+            ref={editorRef}
+            contentEditable
+            suppressContentEditableWarning
+            onInput={handleInput}
+            onKeyDown={handleKeyDown}
+            spellCheck
+            autoFocus
+            data-placeholder="Start writing…"
+            className="wv-editor flex-1 p-4 leading-relaxed outline-none overflow-y-auto text-gray-900"
+            style={{
+              fontSize: '18px',
+              lineHeight: '1.6',
+              caretColor: '#000',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          />
+
+          {/* Bottom stats */}
+          <div className="border-t border-gray-100 px-4 py-2 text-xs text-gray-500 flex justify-between bg-white shrink-0">
+            <span>{wordCount} words</span>
+            <span>{isRecording ? '🔒 Recording' : 'Paused'}</span>
+          </div>
+
+          {showFinishModal && (
+            <FinishModal
+              wordCount={wordCount}
+              duration={formatTime(elapsed)}
+              keystrokeCount={keystrokeCount}
+              pauseCount={pauseCount}
+              pasteCount={props.pasteCount}
+              pages={pages}
+              onKeepWriting={() => setShowFinishModal(false)}
+              onAnalyze={() => {
+                setShowFinishModal(false)
+                onFinish()
+              }}
+            />
+          )}
+
+          <style>{`
+            .wv-editor:empty:before {
+              content: attr(data-placeholder);
+              color: #9ca3af;
+              pointer-events: none;
+            }
+          `}</style>
+        </div>
+      )
+    }
 
     return (
       <div className="flex flex-col h-screen bg-[#f0f4f9] overflow-hidden">

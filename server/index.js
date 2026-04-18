@@ -2,15 +2,19 @@ require('dotenv').config();
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
+const session = require('express-session');
+const passport = require('passport');
 const { initialize } = require('./db/database');
 const { generalLimiter } = require('./middleware/rateLimiter');
 const sessionRoutes = require('./routes/sessions');
 const authRoutes = require('./routes/auth');
+const oauthRoutes = require('./routes/oauth');
 const paymentRoutes = require('./routes/payments');
 const { ensureStripeProducts } = require('./routes/payments');
 const analyticsRoutes = require('./routes/analytics');
 const coachRoutes = require('./routes/coach');
 const referralRoutes = require('./routes/referrals');
+const teacherRoutes = require('./routes/teacher');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -35,7 +39,7 @@ app.use(cors({
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
@@ -44,6 +48,15 @@ app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 
 // Body parsing — sessions can be large
 app.use(express.json({ limit: '10mb' }));
+
+// Session + Passport (needed for OAuth redirect flow)
+app.use(session({
+  secret: process.env.JWT_SECRET || 'writevault-dev-secret-change-in-prod',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: process.env.NODE_ENV === 'production', maxAge: 10 * 60 * 1000 },
+}));
+app.use(passport.initialize());
 
 // General rate limiter
 app.use(generalLimiter);
@@ -56,10 +69,12 @@ app.get('/health', (req, res) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api', authRoutes);  // for /api/waitlist
+app.use('/api/oauth', oauthRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/coach', coachRoutes);
 app.use('/api/referrals', referralRoutes);
+app.use('/api/teacher', teacherRoutes);
 app.use('/api/sessions', sessionRoutes);
 
 // /api/verify is mounted on the sessions router but accessible at /api/verify

@@ -98,6 +98,83 @@ export async function getTeacherView(idOrHash: string): Promise<{ ok: true; data
   return { ok: true, data }
 }
 
+function authHeader(): Record<string, string> {
+  const token = localStorage.getItem('wv_auth_token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+export async function deleteSessionRemote(sessionId: string): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const res = await fetch(`${API}/sessions/${encodeURIComponent(sessionId)}`, {
+      method: 'DELETE',
+      headers: { ...authHeader() },
+    })
+    if (res.status === 404) {
+      return { success: true }
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+      return { success: false, error: err.error || `HTTP ${res.status}` }
+    }
+    return { success: true }
+  } catch {
+    return { success: false, error: 'Network error' }
+  }
+}
+
+export interface TeacherDashboardData {
+  totalVerified: number
+  recentVerifications: Array<{
+    id: string
+    sessionId: string
+    title: string
+    humanScore: number
+    sha256Hash: string
+    verifiedAt: number
+    createdAt: number
+  }>
+  sharedSessions: Array<unknown>
+}
+
+export async function getTeacherDashboard(): Promise<TeacherDashboardData> {
+  const res = await fetch(`${API}/teacher/dashboard`, {
+    headers: { ...authHeader() },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+    throw new Error(err.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export interface BulkVerifyResult {
+  input: string
+  found: boolean
+  error?: string
+  id?: string
+  title?: string
+  humanScore?: number
+  sha256Hash?: string
+  startTime?: number
+  endTime?: number
+  createdAt?: number
+  wordCount?: number
+}
+
+export async function teacherVerifyBulk(hashes: string[]): Promise<BulkVerifyResult[]> {
+  const res = await fetch(`${API}/teacher/verify-bulk`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify({ hashes }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+    throw new Error(err.error || `HTTP ${res.status}`)
+  }
+  const data = await res.json()
+  return data.results || []
+}
+
 export async function verifyHash(hash: string): Promise<VerifyResult> {
   const res = await fetch(`${API}/sessions/verify`, {
     method: 'POST',
