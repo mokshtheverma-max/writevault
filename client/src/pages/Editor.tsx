@@ -13,6 +13,7 @@ import DocumentEditor from '../components/DocumentEditor'
 import { track, Events } from '../utils/analytics'
 import { checkMilestones } from '../components/MilestoneToast'
 import { listSessions } from '../utils/sessionStorage'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 const AUTOSAVE_INTERVAL = 30_000
 const AUTOSAVE_KEY = 'writevault_autosave'
@@ -34,6 +35,7 @@ function formatTime(ms: number): string {
 }
 
 export default function Editor() {
+  usePageTitle('WriteVault — Editor')
   const navigate = useNavigate()
   const [content, setContent] = useState('')
   const [events, setEvents] = useState<KeystrokeEvent[]>([])

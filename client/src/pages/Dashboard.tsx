@@ -8,18 +8,22 @@ import {
   CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { useState } from 'react'
-import { Fingerprint, ArrowLeft, FileText, Share2, Lock, Megaphone } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Fingerprint, ArrowLeft, FileText, Share2, Lock, Megaphone, AlertCircle } from 'lucide-react'
 import ShareModal from '../components/ShareModal'
 import ShareScoreModal from '../components/ShareScoreModal'
 import UpgradePrompt from '../components/UpgradePrompt'
+import ErrorBoundary from '../components/ErrorBoundary'
+import { Skeleton } from '../components/Skeleton'
 import { usePlan } from '../hooks/usePlan'
 import { loadSession } from '../utils/sessionStorage'
 import HumanScoreGauge from '../components/HumanScoreGauge'
 import StatBadge from '../components/StatBadge'
+import type { WritingSession } from '../types'
 import type { AuthenticityReport, LayerScore } from '../engine/types'
 import DNAManager from '../dna'
 import type { DNAComparisonResult } from '../dna'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 // ─── chart data builders ──────────────────────────────────────────────────────
 
@@ -129,6 +133,29 @@ function LayerBar({ label, weight, layer }: { label: string; weight: number; lay
   )
 }
 
+function LoadingSkeleton() {
+  return (
+    <div className="min-h-screen bg-base text-text-primary">
+      <header className="bg-surface border-b border-border px-4 sm:px-8 py-5">
+        <Skeleton className="h-6 w-48" />
+      </header>
+      <div className="p-4 sm:p-8 space-y-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Skeleton className="h-20" />
+          <Skeleton className="h-20" />
+          <Skeleton className="h-20" />
+          <Skeleton className="h-20" />
+        </div>
+        <Skeleton className="h-64" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Skeleton className="h-64" />
+          <Skeleton className="h-64" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function DNALayerBar({ label, score }: { label: string; score: number }) {
   const color = score > 70 ? '#10b981' : score > 45 ? '#f59e0b' : '#ef4444'
   return (
@@ -146,21 +173,74 @@ function DNALayerBar({ label, score }: { label: string; score: number }) {
 
 // ─── main component ───────────────────────────────────────────────────────────
 
+type DashboardData = {
+  session: WritingSession
+  report: AuthenticityReport | null
+  dnaComparison: DNAComparisonResult | null
+}
+
 export default function Dashboard() {
+  usePageTitle('WriteVault — Session Analysis')
   const { sessionId } = useParams<{ sessionId: string }>()
   const navigate = useNavigate()
   const [shareOpen, setShareOpen] = useState(false)
   const [shareScoreOpen, setShareScoreOpen] = useState(false)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const { canExportPDF, canShareTeacher, canUseDNA } = usePlan()
-  const session = sessionId ? loadSession(sessionId) : null
-  const report  = sessionId ? loadReport(sessionId)  : null
-  const dnaComparison   = sessionId ? loadDNAComparison(sessionId) : null
+
+  const [data, setData] = useState<DashboardData | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!sessionId) {
+      setLoading(false)
+      return
+    }
+    try {
+      const session = loadSession(sessionId)
+      if (!session) {
+        setData(null)
+      } else {
+        setData({
+          session,
+          report: loadReport(sessionId),
+          dnaComparison: loadDNAComparison(sessionId),
+        })
+      }
+    } catch (e) {
+      console.error('Failed to load session:', e)
+      setLoadError('We could not load this session. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }, [sessionId])
+
   const dnaProfile      = DNAManager.getDNAProfile()
   const dnaSessionCount = DNAManager.getSessionCount()
   const dnaConfLevel    = DNAManager.getConfidenceLevel()
 
-  if (!session) {
+  if (loading) return <LoadingSkeleton />
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-base flex items-center justify-center px-6">
+        <div className="text-center max-w-md">
+          <AlertCircle className="w-10 h-10 text-danger mx-auto mb-4" />
+          <h2 className="text-xl font-semibold mb-2">Couldn't load session</h2>
+          <p className="text-text-secondary text-sm mb-6">{loadError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-primary hover:bg-primary-hover text-white font-medium px-6 py-3 rounded-xl text-sm transition-colors"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!data) {
     return (
       <div className="min-h-screen bg-base flex items-center justify-center">
         <div className="text-center">
@@ -172,6 +252,8 @@ export default function Dashboard() {
       </div>
     )
   }
+
+  const { session, report, dnaComparison } = data
 
   const duration  = Math.round((session.endTime - session.startTime) / 60000)
   const wordCount = session.content.trim().split(/\s+/).filter(Boolean).length
@@ -313,6 +395,7 @@ export default function Dashboard() {
 
           {/* 5-Layer Engine */}
           {report && (
+            <ErrorBoundary section label="Authenticity layers failed to render.">
             <section>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-text-primary">Authenticity Layers</h2>
@@ -345,6 +428,7 @@ export default function Dashboard() {
                 <span className="truncate">Hash: {report.sessionHash.slice(0, 24)}…</span>
               </div>
             </section>
+            </ErrorBoundary>
           )}
 
           {/* Writing DNA — gated for free users */}
@@ -434,6 +518,7 @@ export default function Dashboard() {
           )}
 
           {/* Charts 2×2 */}
+          <ErrorBoundary section label="Charts failed to render.">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
             {[
               {
@@ -498,6 +583,7 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
+          </ErrorBoundary>
         </main>
       </div>
     </div>

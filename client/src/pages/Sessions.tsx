@@ -11,6 +11,9 @@ import {
   Download,
   Share2,
 } from 'lucide-react'
+import ErrorBoundary from '../components/ErrorBoundary'
+import { SkeletonRow } from '../components/Skeleton'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
 
@@ -46,17 +49,28 @@ const FILTERS: { key: Filter; label: string }[] = [
 /* ── Component ────────────────────────────────────────────────────────── */
 
 export default function Sessions() {
+  usePageTitle('WriteVault — Sessions')
   const navigate = useNavigate()
-  const [sessions, setSessions] = useState<WritingSession[]>([])
+  const [sessions, setSessions] = useState<WritingSession[] | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
 
   useEffect(() => {
-    setSessions(listSessions())
+    try {
+      setSessions(listSessions())
+    } catch (e) {
+      console.error('Failed to load sessions:', e)
+      setLoadError('We could not load your sessions. Please refresh the page.')
+      setSessions([])
+    }
   }, [])
 
+  const isLoading = sessions === null
+  const safeSessions = sessions ?? []
+
   const filtered = useMemo(() => {
-    let result = sessions
+    let result = safeSessions
 
     // Search
     if (search.trim()) {
@@ -82,7 +96,7 @@ export default function Sessions() {
     }
 
     return result
-  }, [sessions, search, filter])
+  }, [safeSessions, search, filter])
 
   return (
     <div className="min-h-screen bg-base text-text-primary">
@@ -92,7 +106,11 @@ export default function Sessions() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-bold">My Sessions</h1>
-            <p className="text-text-secondary text-sm mt-1">{sessions.length} total session{sessions.length !== 1 ? 's' : ''}</p>
+            <p className="text-text-secondary text-sm mt-1">
+              {isLoading
+                ? 'Loading sessions…'
+                : `${safeSessions.length} total session${safeSessions.length !== 1 ? 's' : ''}`}
+            </p>
           </div>
           <Link
             to="/editor"
@@ -132,18 +150,31 @@ export default function Sessions() {
         </div>
 
         {/* Session list */}
-        {filtered.length === 0 ? (
+        <ErrorBoundary section label="Sessions list failed to load.">
+        {loadError ? (
+          <div className="bg-danger/10 border border-danger/30 text-danger text-sm rounded-xl p-6 text-center">
+            <p className="font-medium mb-2">Unable to load sessions</p>
+            <p className="text-text-secondary">{loadError}</p>
+          </div>
+        ) : isLoading ? (
+          <div className="space-y-3">
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="bg-surface border border-border rounded-xl p-12 text-center">
             <PenLine size={40} className="mx-auto text-primary mb-4 opacity-60" />
             <h3 className="text-text-primary font-medium mb-1">
-              {sessions.length === 0 ? 'No sessions yet' : 'No matching sessions'}
+              {safeSessions.length === 0 ? 'No sessions yet' : 'No matching sessions'}
             </h3>
             <p className="text-text-secondary text-sm mb-5">
-              {sessions.length === 0
+              {safeSessions.length === 0
                 ? 'Write your first essay to start building your proof history'
                 : 'Try a different search term or filter'}
             </p>
-            {sessions.length === 0 && (
+            {safeSessions.length === 0 && (
               <Link
                 to="/editor"
                 className="inline-flex items-center gap-2 bg-primary hover:bg-primary-hover text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
@@ -209,6 +240,7 @@ export default function Sessions() {
             })}
           </div>
         )}
+        </ErrorBoundary>
       </div>
     </div>
   )

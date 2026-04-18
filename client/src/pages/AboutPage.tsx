@@ -1,7 +1,9 @@
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 export default function AboutPage() {
+  usePageTitle('WriteVault — About')
   const navigate = useNavigate()
 
   return (

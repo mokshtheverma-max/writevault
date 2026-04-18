@@ -87,79 +87,94 @@ router.post('/', optionalAuth, checkSessionLimit, validateSession, async (req, r
 
 // GET /api/sessions/:id — full session with verification log
 router.get('/:id', async (req, res) => {
-  const session = await getSessionById(req.params.id);
-  if (!session) {
-    return res.status(404).json({ error: 'Session not found' });
-  }
-
-  // Log verification attempt
   try {
-    await insertVerification({
-      id: randomUUID(),
-      session_id: session.id,
-      verifier_ip: req.ip,
+    const session = await getSessionById(req.params.id);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Log verification attempt
+    try {
+      await insertVerification({
+        id: randomUUID(),
+        session_id: session.id,
+        verifier_ip: req.ip,
+      });
+    } catch (err) {
+      console.error('Verification log error:', err);
+    }
+
+    const { count } = await getVerificationCount(session.id);
+
+    res.json({
+      ...session,
+      events: JSON.parse(session.events),
+      metadata: JSON.parse(session.metadata),
+      verificationCount: count,
     });
   } catch (err) {
-    console.error('Verification log error:', err);
+    console.error('Get session error:', err);
+    res.status(500).json({ error: 'Failed to load session' });
   }
-
-  const { count } = await getVerificationCount(session.id);
-
-  res.json({
-    ...session,
-    events: JSON.parse(session.events),
-    metadata: JSON.parse(session.metadata),
-    verificationCount: count,
-  });
 });
 
 // GET /api/sessions/:id/summary — lightweight session summary
 router.get('/:id/summary', async (req, res) => {
-  const session = await getSessionById(req.params.id);
-  if (!session) {
-    return res.status(404).json({ error: 'Session not found' });
+  try {
+    const session = await getSessionById(req.params.id);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const { count } = await getVerificationCount(session.id);
+
+    res.json({
+      id: session.id,
+      title: session.title,
+      humanScore: session.human_score,
+      sha256Hash: session.sha256_hash,
+      startTime: session.start_time,
+      endTime: session.end_time,
+      createdAt: session.created_at,
+      metadata: JSON.parse(session.metadata),
+      verificationCount: count,
+    });
+  } catch (err) {
+    console.error('Get session summary error:', err);
+    res.status(500).json({ error: 'Failed to load session summary' });
   }
-
-  const { count } = await getVerificationCount(session.id);
-
-  res.json({
-    id: session.id,
-    title: session.title,
-    humanScore: session.human_score,
-    sha256Hash: session.sha256_hash,
-    startTime: session.start_time,
-    endTime: session.end_time,
-    createdAt: session.created_at,
-    metadata: JSON.parse(session.metadata),
-    verificationCount: count,
-  });
 });
 
 // GET /api/sessions/:id/events — paginated events
 router.get('/:id/events', async (req, res) => {
-  const session = await getSessionById(req.params.id);
-  if (!session) {
-    return res.status(404).json({ error: 'Session not found' });
+  try {
+    const session = await getSessionById(req.params.id);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(5000, Math.max(1, parseInt(req.query.limit) || 1000));
+    const offset = (page - 1) * limit;
+
+    const events = JSON.parse(session.events);
+    const total = events.length;
+    const paginated = events.slice(offset, offset + limit);
+
+    res.json({
+      sessionId: session.id,
+      events: paginated,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (err) {
+    console.error('Get session events error:', err);
+    res.status(500).json({ error: 'Failed to load session events' });
   }
-
-  const page = Math.max(1, parseInt(req.query.page) || 1);
-  const limit = Math.min(5000, Math.max(1, parseInt(req.query.limit) || 1000));
-  const offset = (page - 1) * limit;
-
-  const events = JSON.parse(session.events);
-  const total = events.length;
-  const paginated = events.slice(offset, offset + limit);
-
-  res.json({
-    sessionId: session.id,
-    events: paginated,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
-  });
 });
 
 // ─── generateObservations ─────────────────────────────────────────────────────
@@ -243,6 +258,7 @@ function deriveLayerScores(humanScore, metadata) {
 
 // GET /api/sessions/:id/teacher-view — educator-facing verified session report
 router.get('/:id/teacher-view', async (req, res) => {
+  try {
   const idOrHash = req.params.id;
 
   // Try lookup by UUID first, then by hash
@@ -320,47 +336,56 @@ router.get('/:id/teacher-view', async (req, res) => {
     verifiedAt: Math.floor(Date.now() / 1000),
     retrieved_independently: true,
   });
+  } catch (err) {
+    console.error('Teacher-view error:', err);
+    res.status(500).json({ error: 'Failed to load teacher view' });
+  }
 });
 
 // POST /api/verify — verify by SHA256 hash
 router.post('/verify', verifyLimiter, async (req, res) => {
-  const { hash } = req.body;
-  if (!hash || typeof hash !== 'string') {
-    return res.status(400).json({ error: 'hash is required' });
-  }
-
-  const session = await getSessionByHash(hash.toLowerCase().trim());
-  if (!session) {
-    return res.status(404).json({ error: 'No session found with this hash' });
-  }
-
   try {
-    await insertVerification({
-      id: randomUUID(),
-      session_id: session.id,
-      verifier_ip: req.ip,
+    const { hash } = req.body;
+    if (!hash || typeof hash !== 'string') {
+      return res.status(400).json({ error: 'hash is required' });
+    }
+
+    const session = await getSessionByHash(hash.toLowerCase().trim());
+    if (!session) {
+      return res.status(404).json({ error: 'No session found with this hash' });
+    }
+
+    try {
+      await insertVerification({
+        id: randomUUID(),
+        session_id: session.id,
+        verifier_ip: req.ip,
+      });
+    } catch (err) {
+      console.error('Verification log error:', err);
+    }
+
+    const { count } = await getVerificationCount(session.id);
+
+    res.json({
+      verified: true,
+      session: {
+        id: session.id,
+        title: session.title,
+        humanScore: session.human_score,
+        sha256Hash: session.sha256_hash,
+        startTime: session.start_time,
+        endTime: session.end_time,
+        createdAt: session.created_at,
+        metadata: JSON.parse(session.metadata),
+      },
+      verifiedAt: Math.floor(Date.now() / 1000),
+      verificationCount: count,
     });
   } catch (err) {
-    console.error('Verification log error:', err);
+    console.error('Verify endpoint error:', err);
+    res.status(500).json({ error: 'Verification failed' });
   }
-
-  const { count } = await getVerificationCount(session.id);
-
-  res.json({
-    verified: true,
-    session: {
-      id: session.id,
-      title: session.title,
-      humanScore: session.human_score,
-      sha256Hash: session.sha256_hash,
-      startTime: session.start_time,
-      endTime: session.end_time,
-      createdAt: session.created_at,
-      metadata: JSON.parse(session.metadata),
-    },
-    verifiedAt: Math.floor(Date.now() / 1000),
-    verificationCount: count,
-  });
 });
 
 module.exports = router;

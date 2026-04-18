@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { track, Events } from '../utils/analytics'
-import { GraduationCap, BookOpen, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { GraduationCap, BookOpen, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 export default function Auth() {
+  usePageTitle('WriteVault — Sign In')
   const [searchParams] = useSearchParams()
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [name, setName] = useState('')
@@ -62,21 +65,30 @@ export default function Auth() {
         <div className="bg-surface border border-border rounded-2xl p-5 sm:p-8">
           <form onSubmit={handleSubmit} autoComplete="on" className="space-y-4 sm:space-y-5">
             {/* Name (register only) */}
-            {mode === 'register' && (
-              <div>
-                <label className="block text-text-secondary text-sm mb-1.5">Full name</label>
-                <input
-                  type="text"
-                  name="name"
-                  autoComplete="name"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  required
-                  className="w-full bg-elevated border border-border rounded-lg px-4 py-3 text-text-primary placeholder-text-muted text-sm focus:outline-none focus:border-primary transition-colors"
-                  placeholder="Your name"
-                />
-              </div>
-            )}
+            <AnimatePresence initial={false}>
+              {mode === 'register' && (
+                <motion.div
+                  key="name-field"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  <label className="block text-text-secondary text-sm mb-1.5">Full name</label>
+                  <input
+                    type="text"
+                    name="name"
+                    autoComplete="name"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    required
+                    className="w-full bg-elevated border border-border rounded-lg px-4 py-3 text-text-primary placeholder-text-muted text-sm focus:outline-none focus:border-primary transition-colors"
+                    placeholder="Your name"
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Email */}
             <div>
@@ -159,20 +171,36 @@ export default function Auth() {
             )}
 
             {/* Error */}
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-red-400 text-sm">
-                {error}
-              </div>
-            )}
+            <AnimatePresence>
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.18 }}
+                  className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-red-300 text-sm"
+                  role="alert"
+                >
+                  <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                  <span>{error}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Submit */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-primary hover:bg-primary-hover disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+              className="w-full bg-primary hover:bg-primary-hover disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all hover:shadow-glow-sm flex items-center justify-center gap-2"
             >
-              {loading && <Loader2 size={18} className="animate-spin" />}
-              {mode === 'register' ? 'Create Free Account' : 'Sign In'}
+              {loading ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  {mode === 'register' ? 'Creating account…' : 'Signing in…'}
+                </>
+              ) : (
+                mode === 'register' ? 'Create Free Account' : 'Sign In'
+              )}
             </button>
           </form>
 

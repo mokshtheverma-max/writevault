@@ -22,6 +22,9 @@ import {
   Zap,
 } from 'lucide-react'
 import BottomTabBar from '../components/BottomTabBar'
+import ErrorBoundary from '../components/ErrorBoundary'
+import { SkeletonCard, SkeletonRow } from '../components/Skeleton'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
 
@@ -72,30 +75,38 @@ const NAV_LINKS = [
 /* ── Component ────────────────────────────────────────────────────────── */
 
 export default function Home() {
+  usePageTitle('WriteVault — Home')
   const navigate = useNavigate()
   const { user, logout } = useAuth()
-  const [sessions, setSessions] = useState<WritingSession[]>([])
+  const [sessions, setSessions] = useState<WritingSession[] | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
-    const loaded = listSessions()
-    setSessions(loaded)
-    // Check for uncelebrated milestones
-    if (loaded.length > 0) {
-      checkMilestones({ sessionCount: loaded.length })
+    try {
+      const loaded = listSessions()
+      setSessions(loaded)
+      if (loaded.length > 0) checkMilestones({ sessionCount: loaded.length })
+    } catch (e) {
+      console.error('Failed to load sessions:', e)
+      setLoadError('We could not load your sessions. Please refresh the page.')
+      setSessions([])
     }
   }, [])
 
-  const recentSessions = sessions.slice(0, 5)
+  const isLoading = sessions === null
+  const safeSessions = sessions ?? []
+
+  const recentSessions = safeSessions.slice(0, 5)
 
   const totalWords = useMemo(
-    () => sessions.reduce((sum, s) => sum + s.content.trim().split(/\s+/).filter(Boolean).length, 0),
-    [sessions]
+    () => safeSessions.reduce((sum, s) => sum + s.content.trim().split(/\s+/).filter(Boolean).length, 0),
+    [safeSessions]
   )
 
   const avgScore = useMemo(() => {
-    if (sessions.length === 0) return 0
-    return Math.round(sessions.reduce((sum, s) => sum + s.humanScore, 0) / sessions.length)
-  }, [sessions])
+    if (safeSessions.length === 0) return 0
+    return Math.round(safeSessions.reduce((sum, s) => sum + s.humanScore, 0) / safeSessions.length)
+  }, [safeSessions])
 
   const dna = DNAManager.getDNAProfile()
   const dnaConfidence = Math.round(dna.confidence.overall)
@@ -171,36 +182,56 @@ export default function Home() {
             <p className="text-text-secondary text-sm mt-1">Here's your writing activity.</p>
           </section>
 
+          {loadError && (
+            <div className="bg-danger/10 border border-danger/30 text-danger text-sm rounded-xl p-4 mb-6">
+              {loadError}
+            </div>
+          )}
+
           {/* Stats Row */}
-          <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
-            <StatCard
-              icon={<History size={20} className="text-primary" />}
-              label="Total Sessions"
-              value={sessions.length}
-              sub={`${sessions.length} session${sessions.length !== 1 ? 's' : ''} recorded`}
-            />
-            <StatCard
-              icon={<FileText size={20} className="text-primary" />}
-              label="Words Written"
-              value={totalWords.toLocaleString()}
-              sub={`${totalWords.toLocaleString()} total words`}
-            />
-            <StatCard
-              icon={<Fingerprint size={20} className="text-primary" />}
-              label="DNA Confidence"
-              value={`${dnaConfidence}%`}
-              sub={`Based on ${dnaSessionCount} session${dnaSessionCount !== 1 ? 's' : ''}`}
-            />
-            <StatCard
-              icon={<Zap size={20} className={scoreColor(avgScore)} />}
-              label="Avg Human Score"
-              value={`${avgScore}/100`}
-              sub="average"
-              valueClass={scoreColor(avgScore)}
-            />
-          </section>
+          <ErrorBoundary section label="Stats failed to load.">
+            <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
+              {isLoading ? (
+                <>
+                  <SkeletonCard />
+                  <SkeletonCard />
+                  <SkeletonCard />
+                  <SkeletonCard />
+                </>
+              ) : (
+                <>
+                  <StatCard
+                    icon={<History size={20} className="text-primary" />}
+                    label="Total Sessions"
+                    value={safeSessions.length}
+                    sub={`${safeSessions.length} session${safeSessions.length !== 1 ? 's' : ''} recorded`}
+                  />
+                  <StatCard
+                    icon={<FileText size={20} className="text-primary" />}
+                    label="Words Written"
+                    value={totalWords.toLocaleString()}
+                    sub={`${totalWords.toLocaleString()} total words`}
+                  />
+                  <StatCard
+                    icon={<Fingerprint size={20} className="text-primary" />}
+                    label="DNA Confidence"
+                    value={`${dnaConfidence}%`}
+                    sub={`Based on ${dnaSessionCount} session${dnaSessionCount !== 1 ? 's' : ''}`}
+                  />
+                  <StatCard
+                    icon={<Zap size={20} className={scoreColor(avgScore)} />}
+                    label="Avg Human Score"
+                    value={`${avgScore}/100`}
+                    sub="average"
+                    valueClass={scoreColor(avgScore)}
+                  />
+                </>
+              )}
+            </section>
+          </ErrorBoundary>
 
           {/* Recent Sessions */}
+          <ErrorBoundary section label="Recent sessions failed to load.">
           <section className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-text-primary">Recent Sessions</h2>
@@ -212,7 +243,13 @@ export default function Home() {
               </Link>
             </div>
 
-            {recentSessions.length === 0 ? (
+            {isLoading ? (
+              <div className="space-y-3">
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
+              </div>
+            ) : recentSessions.length === 0 ? (
               <div className="bg-surface border border-border rounded-xl p-12 text-center">
                 <PenLine size={40} className="mx-auto text-primary mb-4 opacity-60" />
                 <h3 className="text-text-primary font-medium mb-1">No sessions yet</h3>
@@ -264,8 +301,10 @@ export default function Home() {
               </div>
             )}
           </section>
+          </ErrorBoundary>
 
           {/* DNA Progress */}
+          <ErrorBoundary section label="Writing DNA panel failed to load.">
           <section className="mb-8">
             <div className="bg-surface border border-border rounded-xl p-6">
               <div className="flex flex-col lg:flex-row gap-6">
@@ -315,6 +354,7 @@ export default function Home() {
               </div>
             </div>
           </section>
+          </ErrorBoundary>
 
           {/* Quick Actions */}
           <section className="mb-10">

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { track, Events } from '../utils/analytics'
+import { usePageTitle } from '../hooks/usePageTitle'
 import {
   PenLine,
   Activity,
@@ -17,6 +18,7 @@ import {
   Star,
 } from 'lucide-react'
 import MobileNav from '../components/MobileNav'
+import BackToTop from '../components/BackToTop'
 
 // ─── Grid background CSS ────────────────────────────────────────────────────
 
@@ -55,6 +57,7 @@ function Stars() {
 
 export default function Landing() {
   const navigate = useNavigate()
+  usePageTitle('WriteVault — Prove Your Writing is Human')
   useEffect(() => { track(Events.LANDING_VIEWED) }, [])
 
   return (
@@ -570,13 +573,14 @@ export default function Landing() {
         {/* Bottom bar */}
         <div className="max-w-5xl mx-auto border-t border-border mt-12 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
           <p className="text-sm" style={{ color: '#475569' }}>
-            © 2025 WriteVault. Built by a student, for students.
+            © 2026 WriteVault. Built by a student, for students.
           </p>
           <p className="text-xs" style={{ color: '#374151' }}>
             Made with ♥ by Moksh Verma, age 14
           </p>
         </div>
       </footer>
+      <BackToTop />
     </div>
   )
 }

@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import { track, Events } from '../utils/analytics'
 import { API_BASE } from '../config'
 import { useAuth } from '../context/AuthContext'
 import { Check, X, Sparkles, Shield, GraduationCap, Building2, ChevronDown, ChevronUp, Lock } from 'lucide-react'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 const PRICES = {
   student: { monthly: 7, annual: 58 },
@@ -69,6 +71,7 @@ function Feature({ included, children }: { included: boolean; children: React.Re
 }
 
 export default function Pricing() {
+  usePageTitle('WriteVault — Pricing')
   const navigate = useNavigate()
   const { isAuthenticated, token } = useAuth()
   const [annual, setAnnual] = useState(false)
@@ -95,11 +98,12 @@ export default function Pricing() {
         track(Events.UPGRADE_CLICKED, { plan })
         window.location.href = data.checkoutUrl
       } else {
-        console.error('Checkout failed:', data.error)
+        toast.error(data.error || 'Could not start checkout. Please try again.')
         setLoadingPlan(null)
       }
     } catch (err) {
       console.error('Checkout error:', err)
+      toast.error('Network error. Please check your connection and try again.')
       setLoadingPlan(null)
     }
   }
@@ -265,7 +269,7 @@ export default function Pricing() {
               <Feature included>API access</Feature>
               <Feature included>Custom branding</Feature>
               <Feature included>Dedicated support</Feature>
-              <Feature included>SSO integration (coming soon)</Feature>
+              <Feature included>SSO integration</Feature>
             </ul>
             <a
               href="mailto:sales@writevault.app"

@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, CreditCard, ArrowLeft, Sparkles } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { Check, CreditCard, ArrowLeft, Sparkles, AlertCircle } from 'lucide-react'
 import { API_BASE } from '../config'
 import { useAuth } from '../context/AuthContext'
+import { Skeleton } from '../components/Skeleton'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 interface PaymentStatus {
   plan: 'free' | 'student' | 'teacher'
@@ -28,20 +31,30 @@ const PAID_FEATURES = [
 ]
 
 export default function BillingPage() {
+  usePageTitle('WriteVault — Billing')
   const navigate = useNavigate()
   const { token } = useAuth()
   const [status, setStatus] = useState<PaymentStatus | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [portalLoading, setPortalLoading] = useState(false)
 
   useEffect(() => {
     if (!token) return
+    setLoading(true)
+    setLoadError(null)
     fetch(`${API_BASE}/payments/status`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`Request failed (${r.status})`)
+        return r.json()
+      })
       .then((data) => setStatus(data))
-      .catch((err) => console.error('Status error:', err))
+      .catch((err) => {
+        console.error('Status error:', err)
+        setLoadError('We could not load your billing details. Please try again.')
+      })
       .finally(() => setLoading(false))
   }, [token])
 
@@ -55,19 +68,64 @@ export default function BillingPage() {
       if (data.portalUrl) {
         window.location.href = data.portalUrl
       } else {
-        console.error(data.error)
+        toast.error(data.error || 'Could not open the billing portal. Please try again.')
         setPortalLoading(false)
       }
     } catch (err) {
       console.error('Portal error:', err)
+      toast.error('Network error. Please check your connection and try again.')
       setPortalLoading(false)
     }
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-base flex items-center justify-center text-text-muted text-sm">
-        Loading billing…
+      <div className="min-h-screen bg-base text-text-primary">
+        <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 sm:px-8 h-16 border-b border-border bg-base/80 backdrop-blur-xl">
+          <button onClick={() => navigate('/')} className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary" />
+            <span className="font-bold text-lg tracking-tight">WriteVault</span>
+          </button>
+        </nav>
+        <main className="pt-28 pb-20 px-4 sm:px-6">
+          <div className="max-w-3xl mx-auto">
+            <Skeleton className="h-8 w-40 mb-3" />
+            <Skeleton className="h-4 w-64 mb-8" />
+            <div className="bg-surface border border-border rounded-2xl p-6 sm:p-8 space-y-4">
+              <Skeleton className="h-5 w-24" />
+              <Skeleton className="h-8 w-40" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
+              <Skeleton className="h-10 w-full mt-4" />
+            </div>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-base text-text-primary flex flex-col">
+        <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 sm:px-8 h-16 border-b border-border bg-base/80 backdrop-blur-xl">
+          <button onClick={() => navigate('/')} className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary" />
+            <span className="font-bold text-lg tracking-tight">WriteVault</span>
+          </button>
+        </nav>
+        <main className="flex-1 flex items-center justify-center px-6">
+          <div className="max-w-md text-center">
+            <AlertCircle className="w-10 h-10 text-danger mx-auto mb-4" />
+            <h2 className="text-xl font-semibold mb-2">Couldn't load billing</h2>
+            <p className="text-text-secondary text-sm mb-6">{loadError}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-primary hover:bg-primary-hover text-white font-medium px-6 py-3 rounded-xl text-sm transition-colors"
+            >
+              Try again
+            </button>
+          </div>
+        </main>
       </div>
     )
   }

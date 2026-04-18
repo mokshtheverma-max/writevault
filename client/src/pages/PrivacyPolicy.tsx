@@ -1,5 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
+import { usePageTitle } from '../hooks/usePageTitle'
+import BackToTop from '../components/BackToTop'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -11,6 +13,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export default function PrivacyPolicy() {
+  usePageTitle('WriteVault — Privacy Policy')
   const navigate = useNavigate()
 
   return (
@@ -87,6 +90,7 @@ export default function PrivacyPolicy() {
           </p>
         </Section>
       </main>
+      <BackToTop />
     </div>
   )
 }

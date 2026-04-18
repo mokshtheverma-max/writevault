@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import DNAManager from '../dna'
 import { listSessions } from '../utils/sessionStorage'
@@ -10,6 +10,10 @@ import {
   Keyboard,
   BookOpen,
 } from 'lucide-react'
+import ErrorBoundary from '../components/ErrorBoundary'
+import { Skeleton, SkeletonCard } from '../components/Skeleton'
+import type { WritingSession } from '../types'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
 
@@ -25,15 +29,31 @@ function confidenceBadge(level: string): { label: string; cls: string } {
 /* ── Component ────────────────────────────────────────────────────────── */
 
 export default function DNAProfile() {
+  usePageTitle('WriteVault — Writing DNA')
+  const [sessions, setSessions] = useState<WritingSession[] | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  useEffect(() => {
+    try {
+      setSessions(listSessions())
+    } catch (e) {
+      console.error('Failed to load sessions:', e)
+      setLoadError('We could not load your DNA data. Please refresh the page.')
+      setSessions([])
+    }
+  }, [])
+
+  const isLoading = sessions === null
+  const safeSessions = sessions ?? []
+
   const dna = DNAManager.getDNAProfile()
   const sessionCount = DNAManager.getSessionCount()
   const confidence = DNAManager.getConfidenceLevel()
   const badge = confidenceBadge(confidence)
-  const sessions = useMemo(() => listSessions(), [])
 
   const totalWords = useMemo(
-    () => sessions.reduce((sum, s) => sum + s.content.trim().split(/\s+/).filter(Boolean).length, 0),
-    [sessions]
+    () => safeSessions.reduce((sum, s) => sum + s.content.trim().split(/\s+/).filter(Boolean).length, 0),
+    [safeSessions]
   )
 
   return (
@@ -56,6 +76,24 @@ export default function DNAProfile() {
           </span>
         </div>
 
+        {loadError && (
+          <div className="bg-danger/10 border border-danger/30 text-danger text-sm rounded-xl p-4 mb-6">
+            {loadError}
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="space-y-6">
+            <div className="grid grid-cols-3 gap-4">
+              <SkeletonCard /><SkeletonCard /><SkeletonCard />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Skeleton className="h-64" />
+              <Skeleton className="h-64" />
+            </div>
+          </div>
+        ) : (
+        <ErrorBoundary section label="DNA profile failed to render.">
         {/* ── Onboarding (< 2 sessions) ─────────────────────────── */}
         {sessionCount < 2 ? (
           <div className="bg-surface border border-border rounded-2xl p-10 text-center">
@@ -183,6 +221,8 @@ export default function DNAProfile() {
 
             </div>
           </>
+        )}
+        </ErrorBoundary>
         )}
 
       </div>

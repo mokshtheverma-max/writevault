@@ -2,6 +2,8 @@ import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
 import MobileNav from '../components/MobileNav'
+import BackToTop from '../components/BackToTop'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 type Article = {
   slug: string
@@ -433,6 +435,7 @@ function BlogNav() {
 }
 
 export default function Blog() {
+  usePageTitle('WriteVault — Blog')
   const [activeSlug, setActiveSlug] = useState<string | null>(null)
   const active = activeSlug ? articles.find(a => a.slug === activeSlug) ?? null : null
 
@@ -463,6 +466,7 @@ export default function Blog() {
             {active.body}
           </div>
         </article>
+        <BackToTop />
       </div>
     )
   }
@@ -512,6 +516,7 @@ export default function Blog() {
           ))}
         </div>
       </section>
+      <BackToTop />
     </div>
   )
 }
